@@ -1,0 +1,369 @@
+:root {
+  --navy: #21295c;
+  --deepblue: #065a82;
+  --teal: #1c7293;
+  --ice: #eaf4f8;
+  --white: #ffffff;
+  --dark: #1a1a1a;
+  --grey: #5b6672;
+  --border: #e2e8ec;
+  --green: #1e8a5a;
+  --amber: #b8862e;
+  --red: #b23a48;
+  font-family: "Segoe UI", Calibri, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f7fafc;
+  color: var(--dark);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* ---------- Welcome ---------- */
+.welcome {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: linear-gradient(160deg, var(--navy) 0%, var(--deepblue) 45%, var(--teal) 100%);
+  color: white;
+  padding: 64px 24px 32px;
+}
+
+.welcome-hero {
+  text-align: center;
+  max-width: 560px;
+  margin-bottom: 48px;
+}
+
+.brand-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: white;
+  margin-bottom: 16px;
+}
+
+.brand-dot-lg {
+  width: 40px;
+  height: 40px;
+  background: white;
+  box-shadow: 0 0 0 8px rgba(255, 255, 255, 0.15);
+}
+
+.welcome-hero h1 {
+  font-size: 2.4rem;
+  margin: 12px 0 8px;
+}
+
+.welcome-hero p {
+  color: #cadcfc;
+  line-height: 1.5;
+  font-size: 1.05rem;
+}
+
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+  max-width: 1080px;
+  width: 100%;
+}
+
+.shortcut-card {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 14px;
+  padding: 24px 20px;
+  text-align: left;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.shortcut-card:hover {
+  background: rgba(255, 255, 255, 0.16);
+  transform: translateY(-3px);
+}
+
+.shortcut-icon {
+  font-size: 1.8rem;
+  margin-bottom: 6px;
+}
+
+.shortcut-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.shortcut-desc {
+  color: #d7e6f0;
+  font-size: 0.9rem;
+  min-height: 40px;
+}
+
+.shortcut-cta {
+  margin-top: 10px;
+  font-weight: 600;
+  color: #9fe0d0;
+}
+
+.welcome-footer {
+  margin-top: auto;
+  padding-top: 48px;
+  color: #a9c2d8;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+/* ---------- Page layout ---------- */
+.page {
+  min-height: 100vh;
+  background: #f7fafc;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 28px 40px 20px;
+  background: white;
+  border-bottom: 1px solid var(--border);
+}
+
+.page-header h1 {
+  margin: 4px 0 0;
+  color: var(--navy);
+  font-size: 1.6rem;
+}
+
+.subtitle {
+  margin: 4px 0 0;
+  color: var(--grey);
+  font-size: 0.95rem;
+}
+
+.brand-mini {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--teal);
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.brand-mini .brand-dot {
+  width: 10px;
+  height: 10px;
+  background: var(--teal);
+  margin: 0;
+}
+
+.page-content {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 28px 40px 64px;
+}
+
+/* ---------- Buttons ---------- */
+.btn-primary {
+  background: var(--deepblue);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  background: var(--teal);
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 18px;
+  color: var(--grey);
+  font-weight: 600;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--teal);
+  font-weight: 600;
+  padding: 0;
+  font-size: 0.88rem;
+}
+
+.btn-link-danger {
+  color: var(--red);
+}
+
+.btn-link + .btn-link {
+  margin-left: 14px;
+}
+
+/* ---------- Toolbar / forms ---------- */
+.toolbar {
+  margin-bottom: 18px;
+}
+
+.form-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px 24px;
+  margin-bottom: 24px;
+}
+
+.form-card h3 {
+  margin-top: 0;
+  color: var(--navy);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--grey);
+}
+
+.field-error {
+  font-size: 0.8rem;
+  color: var(--red);
+}
+
+.input {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 0.95rem;
+  background: white;
+}
+
+.input:focus {
+  outline: 2px solid var(--teal);
+  outline-offset: 1px;
+}
+
+.input-qtd {
+  width: 80px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+/* ---------- Table ---------- */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.data-table th {
+  text-align: left;
+  background: var(--ice);
+  color: var(--navy);
+  font-size: 0.82rem;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.data-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.92rem;
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.row-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.saldo-zero {
+  color: var(--red);
+  font-weight: 700;
+}
+
+/* ---------- Misc ---------- */
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.badge-green { background: #e3f5ec; color: var(--green); }
+.badge-blue { background: #e3edf7; color: var(--deepblue); }
+.badge-amber { background: #fbefd9; color: var(--amber); }
+.badge-grey { background: #eceff1; color: var(--grey); }
+.badge-neutral { background: #eceff1; color: var(--grey); }
+
+.empty-state {
+  text-align: center;
+  color: var(--grey);
+  padding: 48px 0;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: white;
+}
+
+.error-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fdeceb;
+  color: var(--red);
+  border: 1px solid #f4c6c2;
+  border-radius: 8px;
+  padding: 10px 16px;
+  margin-bottom: 18px;
+  font-size: 0.9rem;
+}
+
+.error-banner button {
+  background: none;
+  border: none;
+  color: var(--red);
+  font-size: 1.1rem;
+  line-height: 1;
+}
