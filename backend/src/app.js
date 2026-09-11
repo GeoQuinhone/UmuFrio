@@ -10,7 +10,7 @@ import { errorHandler, notFound } from "./middleware/errorHandler.js";
 export const app = express();
 
 app.use(cors());
-app.use(expres.json());
+app.use(express.json());
 
 app.get("/api/health", (req, res) => res.json ({status: "ok"}));
 
