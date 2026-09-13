@@ -61,7 +61,7 @@ export default function Welcome({ onNavigate }) {
       </div>
 
       <footer className="welcome-footer">
-        TCC · Tecnólogo em Sistemas para Internet · UniALFA — protótipo local
+        TCC · Tecnólogo em Sistemas para Internet · UniALFA — Protótipo Para Apresentar o CRUD
       </footer>
     </div>
   );
