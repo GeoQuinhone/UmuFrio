@@ -156,7 +156,7 @@ export default function Agendamentos({ crud, clientes, usuarios, onBack }) {
           <tbody>
             {items
               .slice()
-              .sort((a, b) => (a.data + a.hora).localeCompare(b.data + b.hora))
+              .sort((a, b) => `${a.data ?? ""} ${a.hora ?? ""}`.localeCompare(`${b.data ?? ""} ${b.hora ?? ""}`))
               .map((a) => (
                 <tr key={a.id}>
                   <td>{clienteNome(a.clienteId)}</td>

@@ -5,7 +5,7 @@ import { produtos, movimentacoesEstoque } from "../db/schema.js";
 
 const router = Router();
 
-// get
+// GET /api/produtos
 router.get("/", async (req, res, next) => {
   try {
     const rows = await db.select().from(produtos).orderBy(produtos.nome);
@@ -15,7 +15,7 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-// post novo produto 
+// POST /api/produtos  (novo produto)
 router.post("/", async (req, res, next) => {
   try {
     const { nome, saldo } = req.body;
@@ -35,7 +35,7 @@ router.post("/", async (req, res, next) => {
   }
 });
 
-// patch rn02 quantidade tem que ser maior que 0
+// PATCH /api/produtos/:id/entrada  (RN-02: quantidade > 0)
 router.patch("/:id/entrada", async (req, res, next) => {
   try {
     const id = Number(req.params.id);
@@ -62,7 +62,7 @@ router.patch("/:id/entrada", async (req, res, next) => {
   }
 });
 
-// patch Rn01 nao permite retirar mais que o saldo disponivel
+// PATCH /api/produtos/:id/saida  (RN-01: não permite retirar mais que o saldo disponível)
 router.patch("/:id/saida", async (req, res, next) => {
   try {
     const id = Number(req.params.id);
@@ -92,7 +92,7 @@ router.patch("/:id/saida", async (req, res, next) => {
   }
 });
 
-// delete
+// DELETE /api/produtos/:id
 router.delete("/:id", async (req, res, next) => {
   try {
     const id = Number(req.params.id);
