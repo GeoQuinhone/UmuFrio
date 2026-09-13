@@ -1,162 +1,180 @@
-# UmuFrio — Protótipo (Frontend + Backend + MySQL)
+UmuFrio — Protótipo Funcional
 
-Protótipo funcional para demonstração dos CRUD's do TCC.  dividido em duas pastas independentes:
+Este projeto apresenta um protótipo funcional do sistema UmuFrio, desenvolvido para demonstração dos CRUDs e das principais regras de negócio do TCC.
 
-```
+A aplicação está organizada em duas partes independentes:
+
 umufrio/
-  backend/    → API REST (Node.js + Express + Drizzle ORM + MySQL)
-  frontend/   → Interface web (React + Vite)
-```
-
-O frontend não guarda mais nada no navegador: toda a informação fica no
-MySQL, acessada através da API do backend.
+├── backend/     API REST
+└── frontend/    Interface web
 
 
-## 1. Instalar o MySQL
+O backend foi desenvolvido utilizando Node.js, Express, Drizzle ORM e MySQL. Já o frontend utiliza React com Vite.
 
-### Windows
-1. Acesse **dev.mysql.com/downloads/installer/** e baixe o **MySQL Installer**
-   (a versão "web" menor é suficiente).
-2. Execute o instalador. Em "Choosing a Setup Type", selecione **Server only**
-   (não precisa do Workbench nem de outras ferramentas, mas pode instalar o
-   **MySQL Workbench** também se quiser uma interface gráfica).
-3. Siga o assistente até a tela de configuração do servidor:
-   - Mantenha a porta padrão **3306**.
-   - Em "Authentication Method", deixe a opção recomendada marcada.
-   - Defina uma **senha para o usuário `root`** e anote em algum lugar.
-4. Finalize a instalação e deixe o MySQL configurado para iniciar
-   automaticamente com o Windows (opção padrão do instalador).
+Diferentemente da versão anterior do protótipo, os dados não são armazenados no navegador. Todas as informações utilizadas pelo sistema são persistidas no banco de dados MySQL e acessadas pelo frontend por meio da API.
 
-### Mac
-1. Acesse **dev.mysql.com/downloads/mysql/** e baixe o pacote `.dmg` para
-   macOS — ou, se tiver Homebrew, rode `brew install mysql`.
-2. Siga o instalador (ou, com Homebrew, rode `brew services start mysql`
-   depois de instalar).
-3. Defina a senha do usuário `root` (o instalador `.dmg` mostra a senha
-   temporária gerada na primeira instalação; com Homebrew, rode
-   `mysql_secure_installation` para definir uma).
+1. Configuração do Backend
 
-### Verificar se instalou certo
-```
-mysql -u root -p
-```
-Digite a senha. Se abrir um prompt `mysql>`, funcionou. Digite `exit` para
-sair.
+Entre na pasta do backend e instale as dependências:
 
-### Criar o banco do projeto
-Ainda dentro do `mysql`:
-```sql
-CREATE DATABASE umufrio;
-```
-
----
-
-## 2. Configurar e rodar o backend
-
-```
 cd backend
 npm install
-```
 
-Copie o arquivo de exemplo de variáveis de ambiente:
-```
-cp .env.example .env
-```
-(no Windows, se `cp` não funcionar no terminal, copie e renomeie o arquivo
-pelo Explorador de Arquivos mesmo)
+.env
+Abra o arquivo .env e informe os dados de acesso ao MySQL:
 
-Abra o `.env` e ajuste a senha do MySQL que você definiu na instalação:
-```
 DATABASE_URL=mysql://root:SUA_SENHA@localhost:3306/umufrio
 PORT=3001
-```
 
-### Criar as tabelas
 
-Duas opções — escolha uma:
+Substitua SUA_SENHA pela senha definida para o usuário root durante a instalação do MySQL.
 
-**Opção A — via Drizzle (gera e aplica a partir do schema.js):**
-```
+Criação das tabelas
+
+Existem duas formas de preparar o banco de dados.
+
+Opção A — utilizando o Drizzle ORM
+
 npm run db:push
-```
 
-**Opção B — via SQL direto (mais simples se a Opção A der algum erro de
-versão):**
-```
+
+Esse comando cria e atualiza as tabelas de acordo com o schema definido no projeto.
+
+Opção B — utilizando o arquivo SQL
+
+Caso ocorra algum problema com a versão do Drizzle, é possível criar o banco diretamente pelo arquivo schema.sql:
+
 mysql -u root -p umufrio < schema.sql
-```
-Essa segunda opção já inclui os mesmos dados de exemplo do protótipo
-anterior (2 clientes, 3 usuários, 3 produtos).
 
-### Iniciar a API
-```
+
+O arquivo SQL também contém os dados iniciais utilizados na demonstração do sistema, incluindo:
+
+2 clientes;
+3 usuários;
+3 produtos.
+Inicialização da API
+
+Com o banco configurado, execute:
+
 npm run dev
-```
-Deve aparecer:
-```
+
+
+Se estiver tudo certo, o terminal apresentará uma mensagem semelhante a:
+
 UmuFrio API rodando em http://localhost:3001
-```
-Deixe esse terminal aberto.
 
----
 
-## 3. Configurar e rodar o frontend
+O terminal deverá permanecer aberto enquanto o sistema estiver sendo utilizado.
 
-Abra **um novo terminal** (deixe o backend rodando no outro):
+2. Configuração do Frontend
 
-```
+Abra outro terminal, mantendo o backend em execução, e acesse a pasta do frontend:
+
 cd frontend
 npm install
+
+
+Depois, inicie a aplicação:
+
 npm run dev
-```
 
-O navegador abre sozinho em `http://localhost:5173`. A tela de boas-vindas
-agora carrega os dados de verdade do MySQL através da API.
 
-Se o backend estiver rodando em outra porta/endereço, copie
-`frontend/.env.example` para `frontend/.env` e ajuste `VITE_API_URL`.
+O frontend ficará disponível em:
 
----
+http://localhost:5173
 
-## Instalar o Node.js (caso ainda não tenha)
 
-1. Acesse **nodejs.org**, baixe a versão **LTS** e instale com as opções
-   padrão.
-2. Confirme no terminal:
-   ```
-   node -v
-   npm -v
-   ```
+Ao acessar o endereço, a aplicação realizará as requisições para a API e carregará os dados armazenados no MySQL.
 
----
+Caso o backend esteja configurado para utilizar outro endereço ou porta, copie o arquivo:
 
-## Testando o fluxo completo
+frontend/.env.example
 
-Com backend e frontend rodando ao mesmo tempo (dois terminais abertos):
 
-1. Abra `http://localhost:5173`.
-2. Clique em qualquer cartão (ex.: "Clientes") — a lista deve carregar os
-   dados que estão no MySQL.
-3. Cadastre um cliente novo, feche e reabra o navegador: o dado continua lá,
-   porque agora está no banco, não mais no navegador.
-4. Teste as regras de negócio: tente cadastrar um CPF repetido, tente marcar
-   dois agendamentos no mesmo horário para o mesmo técnico, tente remover
-   mais estoque do que o saldo disponível — o backend deve bloquear e
-   mostrar a mensagem de erro na tela.
+para:
 
-## Se algo der errado
+frontend/.env
 
-- **"Não foi possível conectar ao MySQL"** → confira se o MySQL está rodando
-  e se a senha no `backend/.env` está correta.
-- **Tela fica em "Carregando..." para sempre** → confira se o backend está
-  rodando (`npm run dev` dentro de `backend/`) e se a porta bate com o
-  `VITE_API_URL` do frontend.
-- **Erro de CORS no navegador** → confirme que está acessando
-  `http://localhost:5173` (não outro endereço) e que o backend está de fato
-  no ar.
 
-## Observação sobre segurança
+e ajuste a variável VITE_API_URL de acordo com a configuração utilizada.
 
-Este é um protótipo para demonstração: as senhas de usuário são salvas como
-texto puro (sem hash/criptografia) só para simplificar. No app real do TCC,
-use bcrypt ou argon2 para gerar o hash da senha antes de gravar no banco.
+3. Instalação do Node.js
+
+Caso o Node.js ainda não esteja instalado no computador, faça o download da versão LTS no site oficial do Node.js e realize a instalação utilizando as opções padrão.
+
+Após a instalação, confirme se o ambiente foi configurado corretamente:
+
+node -v
+npm -v
+
+
+Os dois comandos devem retornar as respectivas versões instaladas.
+
+4. Teste da Aplicação
+
+Para executar o sistema completo, é necessário manter o backend e o frontend em execução simultaneamente.
+
+Backend
+cd backend
+npm run dev
+
+Frontend
+
+Em outro terminal:
+
+cd frontend
+npm run dev
+
+
+Com os dois serviços ativos:
+
+Acesse http://localhost:5173.
+Selecione uma das opções disponíveis, como Clientes.
+Verifique se os registros cadastrados no MySQL são exibidos.
+Cadastre um novo cliente e feche o navegador.
+Abra novamente o sistema e confira se o registro continua disponível.
+Realize os testes das regras de negócio implementadas no backend.
+
+Entre os testes previstos estão:
+
+tentativa de cadastro utilizando um CPF já existente;
+tentativa de realizar dois agendamentos para o mesmo técnico no mesmo horário;
+tentativa de retirar uma quantidade de produtos superior ao estoque disponível.
+
+Nessas situações, a API deve impedir a operação e retornar a mensagem correspondente para que o frontend possa apresentá-la ao usuário.
+
+5. Problemas Comuns
+Não foi possível conectar ao MySQL
+
+Verifique se:
+
+o serviço do MySQL está em execução;
+o banco umufrio foi criado;
+o usuário e a senha estão corretos;
+a variável DATABASE_URL está configurada corretamente no arquivo .env.
+A aplicação permanece em "Carregando..."
+
+Nesse caso, verifique se o backend está funcionando corretamente:
+
+cd backend
+npm run dev
+
+
+Também confira se a URL configurada no VITE_API_URL corresponde ao endereço em que a API está sendo executada.
+
+Erro relacionado ao CORS
+
+Confirme se o frontend está sendo acessado pelo endereço:
+
+http://localhost:5173
+
+
+e se a API do backend está disponível na porta configurada, normalmente:
+
+http://localhost:3001
+
+6. Estrutura de Execução
+
+De forma resumida, o funcionamento do protótipo segue a seguinte estrutura:
+
+                    ┌───────────────
