@@ -15,7 +15,6 @@
     "cors": "^2.8.5",
     "drizzle-orm": "^0.36.4",
     "express": "^4.21.1",
-    "mysql2": "^3.11.4",
     "pg": "^8.23.0"
   },
   "devDependencies": {
