@@ -53,19 +53,19 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-// Algumas versões do drizzle-kit não aceitam "url" para o driver MySQL —
-// por isso quebramos a URL manualmente nos campos host/port/user/password/database.
+
 const dbUrl = new URL(process.env.DATABASE_URL);
 
 module.exports = defineConfig({
-  dialect: "mysql",
+  dialect: "postgresql",
   schema: "./src/db/schema.js",
   out: "./drizzle",
   dbCredentials: {
     host: dbUrl.hostname,
-    port: dbUrl.port ? Number(dbUrl.port) : 3306,
+    port: dbUrl.port ? Number(dbUrl.port) : 5432,
     user: decodeURIComponent(dbUrl.username),
     password: decodeURIComponent(dbUrl.password),
     database: dbUrl.pathname.replace(/^\//, ""),
+    ssl: false, // ambiente local; ajuste para true (ou config de SSL do provedor) quando for para a nuvem
   },
 });
