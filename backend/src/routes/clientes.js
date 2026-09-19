@@ -1,33 +1,60 @@
 import { Router } from "express";
 import { eq, and } from "drizzle-orm";
-import { db } from "../db/client.js"
+import { db } from "../db/client.js";
 import { clientes, agendamentos } from "../db/schema.js";
 
 const router = Router();
 
-function onlyDigits(s){
-    return (s || "").replace(/\D/g, "");
+const TIPOS_RESIDENCIA = ["casa", "apartamento", "barracao"];
+
+function onlyDigits(s) {
+  return (s || "").replace(/\D/g, "");
 }
 
-// get
+function validarEndereco(body) {
+  const { cep, logradouro, numero, bairro, cidade, estado, tipoResidencia } = body;
+  if (
+    !onlyDigits(cep) ||
+    onlyDigits(cep).length !== 8 ||
+    !logradouro?.trim() ||
+    !numero?.trim() ||
+    !bairro?.trim() ||
+    !cidade?.trim() ||
+    !estado?.trim() ||
+    estado.trim().length !== 2
+  ) {
+    return "Preencha CEP (8 dígitos), logradouro, número, bairro, cidade e estado (UF com 2 letras).";
+  }
+  if (!tipoResidencia || !TIPOS_RESIDENCIA.includes(tipoResidencia)) {
+    return 'Informe o tipo de residência (casa, apartamento ou barracao).';
+  }
+  return null;
+}
+
 router.get("/", async (req, res, next) => {
-    try {
-        const rows = await db.select().from(clientes).orderBy(clientes.nome);
-        res.json(rows);
-    } catch (err) {
-        next(err);
-    }
+  try {
+    const rows = await db.select().from(clientes).orderBy(clientes.nome);
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
 });
 
-//post clientes com rf 01 rf 04 rn 01 rn 02
+// POST   RF-01/RF-04, RN-01 (CPF único, só números), RN-02 (endereço completo)
 router.post("/", async (req, res, next) => {
   try {
-    const { nome, cpf, telefone, endereco } = req.body;
-    if (!nome?.trim() || !cpf?.trim() || !telefone?.trim() || !endereco?.trim()) {
-      return res.status(400).json({ error: "Preencha todos os campos obrigatórios." });
+    const { nome, cpf, telefone, cep, logradouro, numero, bairro, cidade, estado, tipoResidencia, complemento } = req.body;
+
+    if (!nome?.trim() || !cpf?.trim() || !telefone?.trim()) {
+      return res.status(400).json({ error: "Preencha nome, CPF e telefone." });
     }
     if (onlyDigits(cpf).length !== 11) {
-      return res.status(400).json({ error: "CPF deve ter 11 dígitos." });
+      return res.status(400).json({ error: "CPF deve ter 11 dígitos (somente números)." });
+    }
+
+    const erroEndereco = validarEndereco(req.body);
+    if (erroEndereco) {
+      return res.status(400).json({ error: erroEndereco });
     }
 
     // RN-01: não pode haver clientes com o mesmo CPF
@@ -37,35 +64,69 @@ router.post("/", async (req, res, next) => {
       return res.status(409).json({ error: "Já existe um cliente cadastrado com este CPF." });
     }
 
-    const [result] = await db.insert(clientes).values({ nome, cpf, telefone, endereco, status: "ativo" });
-    const [created] = await db.select().from(clientes).where(eq(clientes.id, result.insertId));
+    const [created] = await db
+      .insert(clientes)
+      .values({
+        nome: nome.trim(),
+        cpf: onlyDigits(cpf),
+        telefone: telefone.trim(),
+        cep: onlyDigits(cep),
+        logradouro: logradouro.trim(),
+        numero: numero.trim(),
+        bairro: bairro.trim(),
+        cidade: cidade.trim(),
+        estado: estado.trim().toUpperCase(),
+        tipoResidencia,
+        complemento: complemento?.trim() || null,
+        status: "ativo",
+      })
+      .returning();
     res.status(201).json(created);
   } catch (err) {
     next(err);
   }
 });
 
-// put que edita nome/telefone/endereço CPF nao altera rn 01
+// put (edita nome/telefone/endereço; CPF não se altera — RN-01)
 router.put("/:id", async (req, res, next) => {
   try {
     const id = Number(req.params.id);
     const [current] = await db.select().from(clientes).where(eq(clientes.id, id));
     if (!current) return res.status(404).json({ error: "Cliente não encontrado." });
 
-    const { nome, telefone, endereco } = req.body;
-    if (!nome?.trim() || !telefone?.trim() || !endereco?.trim()) {
-      return res.status(400).json({ error: "Preencha todos os campos obrigatórios." });
+    const { nome, telefone, cep, logradouro, numero, bairro, cidade, estado, tipoResidencia, complemento } = req.body;
+    if (!nome?.trim() || !telefone?.trim()) {
+      return res.status(400).json({ error: "Preencha nome e telefone." });
     }
 
-    await db.update(clientes).set({ nome, telefone, endereco }).where(eq(clientes.id, id));
-    const [updated] = await db.select().from(clientes).where(eq(clientes.id, id));
+    const erroEndereco = validarEndereco(req.body);
+    if (erroEndereco) {
+      return res.status(400).json({ error: erroEndereco });
+    }
+
+    const [updated] = await db
+      .update(clientes)
+      .set({
+        nome: nome.trim(),
+        telefone: telefone.trim(),
+        cep: onlyDigits(cep),
+        logradouro: logradouro.trim(),
+        numero: numero.trim(),
+        bairro: bairro.trim(),
+        cidade: cidade.trim(),
+        estado: estado.trim().toUpperCase(),
+        tipoResidencia,
+        complemento: complemento?.trim() || null,
+      })
+      .where(eq(clientes.id, id))
+      .returning();
     res.json(updated);
   } catch (err) {
     next(err);
   }
 });
 
-// path inativar e reativar RN01 bloqueia se tiver agendamento em aberto
+// PATCH   (inativar/reativar; RN-01: bloqueia se houver agendamento em aberto)
 router.patch("/:id/status", async (req, res, next) => {
   try {
     const id = Number(req.params.id);
@@ -86,18 +147,18 @@ router.patch("/:id/status", async (req, res, next) => {
       }
     }
 
-    await db
+    const [updated] = await db
       .update(clientes)
       .set({ status: novoStatus, inativadoEm: novoStatus === "inativo" ? new Date() : null })
-      .where(eq(clientes.id, id));
-    const [updated] = await db.select().from(clientes).where(eq(clientes.id, id));
+      .where(eq(clientes.id, id))
+      .returning();
     res.json(updated);
   } catch (err) {
     next(err);
   }
 });
 
-// delete
+
 router.delete("/:id", async (req, res, next) => {
   try {
     const id = Number(req.params.id);

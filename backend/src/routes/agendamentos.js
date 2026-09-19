@@ -5,7 +5,6 @@ import { agendamentos, clientes, usuarios } from "../db/schema.js";
 
 const router = Router();
 
-//get api e agendamentos
 router.get("/", async (req, res, next) => {
   try {
     const rows = await db.select().from(agendamentos);
@@ -59,13 +58,10 @@ router.post("/", async (req, res, next) => {
         .json({ error: "Este técnico já possui um serviço nesse horário." });
     }
 
-    const [result] = await db
-      .insert(agendamentos)
-      .values({ clienteId, tecnicoId, data, hora, status: "agendado" });
     const [created] = await db
-      .select()
-      .from(agendamentos)
-      .where(eq(agendamentos.id, result.insertId));
+      .insert(agendamentos)
+      .values({ clienteId, tecnicoId, data, hora, status: "agendado" })
+      .returning();
     res.status(201).json(created);
   } catch (err) {
     next(err);
