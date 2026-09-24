@@ -1,26 +1,31 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiRequest } from "../api.js";
 
-/**
- * Hook de CRUD que fala com o nosso backend (Express + MySQL) via REST.
- */
-export function useApiCrud(resourcePath) {
+export function useApiCrud(resourcePath, options = {}) {
+  const { enabled = true } = options;
+
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState(null);
 
   const reload = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
+
     try {
       const data = await apiRequest(resourcePath);
       setItems(data || []);
       setError(null);
-    } catch (e) {
-      setError(e.message);
+    } catch (requestError) {
+      setError(requestError.message);
     } finally {
       setLoading(false);
     }
-  }, [resourcePath]);
+  }, [resourcePath, enabled]);
 
   useEffect(() => {
     reload();
@@ -32,10 +37,11 @@ export function useApiCrud(resourcePath) {
         method: "POST",
         body: JSON.stringify(payload),
       });
+
       await reload();
       return created;
     },
-    [resourcePath, reload]
+    [resourcePath, reload],
   );
 
   const action = useCallback(
@@ -44,10 +50,11 @@ export function useApiCrud(resourcePath) {
         method: "PATCH",
         body: JSON.stringify(payload || {}),
       });
+
       await reload();
       return result;
     },
-    [resourcePath, reload]
+    [resourcePath, reload],
   );
 
   const update = useCallback(
@@ -56,19 +63,32 @@ export function useApiCrud(resourcePath) {
         method: "PUT",
         body: JSON.stringify(payload),
       });
+
       await reload();
       return result;
     },
-    [resourcePath, reload]
+    [resourcePath, reload],
   );
 
   const remove = useCallback(
     async (id) => {
-      await apiRequest(`${resourcePath}/${id}`, { method: "DELETE" });
+      await apiRequest(`${resourcePath}/${id}`, {
+        method: "DELETE",
+      });
+
       await reload();
     },
-    [resourcePath, reload]
+    [resourcePath, reload],
   );
 
-  return { items, loading, error, add, update, remove, action, reload };
+  return {
+    items,
+    loading,
+    error,
+    add,
+    update,
+    remove,
+    action,
+    reload,
+  };
 }

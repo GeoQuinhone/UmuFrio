@@ -29,7 +29,6 @@ export const clientes = pgTable("clientes", {
   estado: varchar("estado", { length: 2 }).notNull(),
   tipoResidencia: tipoResidenciaEnum("tipo_residencia").notNull(),
   complemento: varchar("complemento", { length: 150 }),
-
   status: statusClienteEnum("status").notNull().default("ativo"),
   inativadoEm: timestamp("inativado_em"),
 });
@@ -38,11 +37,15 @@ export const usuarios = pgTable("usuarios", {
   id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
   nome: varchar("nome", { length: 120 }).notNull(),
   email: varchar("email", { length: 150 }).notNull().unique(),
-  cpf: varchar("cpf", { length: 14 }).notNull().unique(), // necessário para o fluxo de recuperação de senha
+  cpf: varchar("cpf", { length: 14 }).notNull().unique(),
   senhaHash: varchar("senha_hash", { length: 255 }).notNull(),
   telefone: varchar("telefone", { length: 20 }).notNull(),
   perfil: perfilEnum("perfil").notNull(),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
+  ativo: integer("ativo").notNull().default(1),
+  primeiroAcesso: integer("primeiro_acesso").notNull().default(0),
+  falhasLogin: integer("falhas_login").notNull().default(0),
+  bloqueadoAte: timestamp("bloqueado_ate"),
 });
 
 export const agendamentos = pgTable("agendamentos", {
@@ -55,8 +58,6 @@ export const agendamentos = pgTable("agendamentos", {
   canceladoEm: timestamp("cancelado_em"),
 });
 
-// ---------- SERVIÇOS ----------
-// Instalação do Ar, Manutenção do Ar, Retirada do Ar
 export const servicos = pgTable("servicos", {
   id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
   nome: varchar("nome", { length: 100 }).notNull(),
@@ -69,12 +70,9 @@ export const produtos = pgTable("produtos", {
   nome: varchar("nome", { length: 120 }).notNull(),
   valorUnitario: numeric("valor_unitario", { precision: 10, scale: 2 }).notNull(),
   saldo: integer("saldo").notNull().default(0),
-  quantidadeMinima: integer("quantidade_minima").notNull().default(0), // dispara alerta de reposição quando saldo < quantidadeMinima
+  quantidadeMinima: integer("quantidade_minima").notNull().default(0),
 });
 
-// ---------- SERVIÇO x PEÇAS (vínculo com quantidade) ----------
-// Cada serviço pode exigir várias peças, cada uma com uma quantidade necessária.
-// É essa tabela que o sistema consulta para debitar o estoque quando a OS entra "em andamento".
 export const servicoPecas = pgTable("servico_pecas", {
   id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
   servicoId: integer("servico_id").notNull().references(() => servicos.id),
@@ -91,14 +89,11 @@ export const ordensServico = pgTable("ordens_servico", {
   concluidaEm: timestamp("concluida_em"),
 });
 
-// ---------- MOVIMENTAÇÕES DE ESTOQUE ----------
-// Registradas automaticamente (tipo "saida") quando a OS muda de status para "andamento",
-// com base nas peças vinculadas ao serviço (servicoPecas). Também cobre entradas manuais (reposição).
 export const movimentacoesEstoque = pgTable("movimentacoes_estoque", {
   id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
   produtoId: integer("produto_id").notNull().references(() => produtos.id),
   usuarioId: integer("usuario_id").references(() => usuarios.id),
-  ordemServicoId: integer("ordem_servico_id").references(() => ordensServico.id), // preenchido quando a saída vem de um débito automático
+  ordemServicoId: integer("ordem_servico_id").references(() => ordensServico.id),
   tipo: tipoMovimentacaoEnum("tipo").notNull(),
   quantidade: integer("quantidade").notNull(),
   data: timestamp("data").notNull().defaultNow(),

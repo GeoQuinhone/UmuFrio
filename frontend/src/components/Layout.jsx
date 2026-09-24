@@ -1,6 +1,15 @@
 import React from "react";
 
-export default function Layout({ title, subtitle, onBack, children }) {
+import { useAuth } from "../AuthContext.jsx";
+
+export default function Layout({
+  title,
+  subtitle,
+  onBack,
+  children,
+}) {
+  const { user, logout } = useAuth();
+
   return (
     <div className="page">
       <header className="page-header">
@@ -10,14 +19,52 @@ export default function Layout({ title, subtitle, onBack, children }) {
               ← Voltar à tela inicial
             </button>
           )}
+
           <h1>{title}</h1>
-          {subtitle && <p className="subtitle">{subtitle}</p>}
+
+          {subtitle && (
+            <p className="subtitle">{subtitle}</p>
+          )}
         </div>
-        <div className="brand-mini">
-          <span className="brand-dot" />
-          UmuFrio
+
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: "8px",
+          }}
+        >
+          <div className="brand-mini">
+            <span className="brand-dot" />
+            UmuFrio
+          </div>
+
+          {user && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                color: "var(--grey)",
+                fontSize: "0.85rem",
+              }}
+            >
+              <span>
+                {user.nome} ({user.perfil})
+              </span>
+
+              <button
+                onClick={logout}
+                className="btn-link"
+              >
+                Sair
+              </button>
+            </div>
+          )}
         </div>
       </header>
+
       <main className="page-content">{children}</main>
     </div>
   );
