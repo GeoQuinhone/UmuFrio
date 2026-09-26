@@ -1,34 +1,61 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useAuth } from "../AuthContext.jsx";
 import { apiRequest } from "../api.js";
 
 export function useApiCrud(resourcePath, options = {}) {
   const { enabled = true } = options;
+  const { user } = useAuth();
+  const scope = user?.id ?? user?.email ?? null;
+  const requestId = useRef(0);
 
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(enabled);
-  const [error, setError] = useState(null);
+  const [result, setResult] = useState({
+    scope,
+    items: [],
+    loading: enabled,
+    error: null,
+  });
 
   const reload = useCallback(async () => {
+    const currentRequest = ++requestId.current;
     if (!enabled) {
-      setLoading(false);
+      setResult({ scope, items: [], loading: false, error: null });
       return;
     }
 
-    setLoading(true);
+    setResult((previous) => ({
+      scope,
+      items: previous.scope === scope ? previous.items : [],
+      loading: true,
+      error: null,
+    }));
 
     try {
       const data = await apiRequest(resourcePath);
-      setItems(data || []);
-      setError(null);
+      if (currentRequest === requestId.current) {
+        setResult({
+          scope,
+          items: Array.isArray(data) ? data : [],
+          loading: false,
+          error: null,
+        });
+      }
     } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
+      if (currentRequest === requestId.current) {
+        setResult({
+          scope,
+          items: [],
+          loading: false,
+          error: requestError.message,
+        });
+      }
     }
-  }, [resourcePath, enabled]);
+  }, [resourcePath, enabled, scope]);
 
   useEffect(() => {
     reload();
+    return () => {
+      requestId.current += 1;
+    };
   }, [reload]);
 
   const add = useCallback(
@@ -81,10 +108,15 @@ export function useApiCrud(resourcePath, options = {}) {
     [resourcePath, reload],
   );
 
+  const visibleResult =
+    enabled && result.scope === scope
+      ? result
+      : { items: [], loading: enabled, error: null };
+
   return {
-    items,
-    loading,
-    error,
+    items: visibleResult.items,
+    loading: visibleResult.loading,
+    error: visibleResult.error,
     add,
     update,
     remove,

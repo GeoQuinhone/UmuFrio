@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import AppShell from "./components/AppShell.jsx";
 import Welcome from "./pages/Welcome.jsx";
 import Clientes from "./pages/Clientes.jsx";
 import Agendamentos from "./pages/Agendamentos.jsx";
@@ -17,6 +18,7 @@ import {
 function AppContent() {
   const { user, loading } = useAuth();
   const [page, setPage] = useState("welcome");
+  const [createAppointmentRequestId, setCreateAppointmentRequestId] = useState(0);
 
   const podeClientes =
     user?.perfil === "ceo" ||
@@ -24,6 +26,10 @@ function AppContent() {
 
   const podeUsuarios =
     user?.perfil === "ceo";
+
+  const podeConsultarTecnicos =
+    user?.perfil === "ceo" ||
+    user?.perfil === "atendente";
 
   const podeMovimentarEstoque =
     user?.perfil === "ceo" ||
@@ -46,6 +52,10 @@ function AppContent() {
 
   const usuarios = useApiCrud("/usuarios", {
     enabled: podeUsuarios,
+  });
+
+  const tecnicos = useApiCrud("/usuarios/tecnicos", {
+    enabled: podeConsultarTecnicos,
   });
 
   const agendamentos = useApiCrud("/agendamentos", {
@@ -81,72 +91,112 @@ function AppContent() {
   }
 
   function voltarParaInicio() {
-    setPage("welcome");
+    navigateTo("welcome");
   }
+
+  function navigateTo(nextPage) {
+    setCreateAppointmentRequestId(0);
+    setPage(nextPage);
+  }
+
+  function solicitarNovoAgendamento() {
+    if (!["ceo", "atendente"].includes(user?.perfil)) return;
+    setCreateAppointmentRequestId((requestId) => requestId + 1);
+    setPage("agendamentos");
+  }
+
+  let pageContent;
 
   switch (page) {
     case "clientes":
-      return (
+      pageContent = (
         <Clientes
           crud={clientes}
+          agendamentos={agendamentos}
           onBack={voltarParaInicio}
         />
       );
+      break;
 
     case "agendamentos":
-      return (
+      pageContent = (
         <Agendamentos
           crud={agendamentos}
           clientes={clientes}
           usuarios={usuarios}
+          tecnicos={tecnicos}
+          createAppointmentRequestId={createAppointmentRequestId}
+          onCreateAppointmentRequestHandled={() => setCreateAppointmentRequestId(0)}
           onBack={voltarParaInicio}
         />
       );
+      break;
 
     case "ordens":
-      return (
+      pageContent = (
         <OrdensServico
           crud={ordensServico}
           agendamentos={agendamentos}
           clientes={clientes}
           usuarios={usuarios}
+          tecnicos={tecnicos}
           servicos={servicos}
           onBack={voltarParaInicio}
         />
       );
+      break;
 
     case "estoque":
-      return (
+      pageContent = (
         <Estoque
           crud={estoque}
           onBack={voltarParaInicio}
         />
       );
+      break;
 
     case "usuarios":
-      return (
+      pageContent = (
         <Usuarios
           crud={usuarios}
           onBack={voltarParaInicio}
         />
       );
+      break;
 
     case "servicos":
-      return (
+      pageContent = (
         <Servicos
           crud={servicos}
           estoque={estoque}
           onBack={voltarParaInicio}
         />
       );
+      break;
 
     default:
-      return (
+      pageContent = (
         <Welcome
-          onNavigate={setPage}
+          onNavigate={navigateTo}
+          onCreateAppointment={solicitarNovoAgendamento}
+          clientes={clientes}
+          agendamentos={agendamentos}
+          ordensServico={ordensServico}
+          estoque={estoque}
+          servicos={servicos}
+          usuarios={usuarios}
         />
       );
   }
+
+  return (
+    <AppShell
+      activePage={page}
+      onNavigate={navigateTo}
+    >
+      {pageContent}
+    </AppShell>
+  );
 }
 
 export default function App() {

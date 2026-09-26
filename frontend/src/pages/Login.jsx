@@ -2,31 +2,33 @@ import React, { useState } from "react";
 
 import { useAuth } from "../AuthContext.jsx";
 import { apiRequest } from "../api.js";
+import Icon from "../components/Icon.jsx";
+import "./auth.css";
+
+const emptyForm = {
+  nome: "",
+  email: "",
+  cpf: "",
+  telefone: "",
+  senha: "",
+};
 
 export default function Login() {
   const { login, setUser } = useAuth();
-
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
-
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
   const [isBootstrap, setIsBootstrap] = useState(false);
-
-  const [form, setForm] = useState({
-    nome: "",
-    email: "",
-    cpf: "",
-    telefone: "",
-    senha: "",
-  });
+  const [form, setForm] = useState(emptyForm);
 
   async function handleLogin(event) {
     event.preventDefault();
-
     setLoading(true);
     setError("");
-
+    setInfo("");
     try {
       await login(email, senha);
     } catch (requestError) {
@@ -38,26 +40,16 @@ export default function Login() {
 
   async function handleBootstrap(event) {
     event.preventDefault();
-
     setLoading(true);
     setError("");
-
     try {
       const data = await apiRequest("/auth/bootstrap", {
         method: "POST",
         body: JSON.stringify(form),
       });
-
       localStorage.setItem("token", data.token);
       setUser(data.usuario);
-
-      setForm({
-        nome: "",
-        email: "",
-        cpf: "",
-        telefone: "",
-        senha: "",
-      });
+      setForm(emptyForm);
     } catch (requestError) {
       setError(
         requestError.message || "Erro ao configurar o primeiro CEO.",
@@ -67,237 +59,197 @@ export default function Login() {
     }
   }
 
-  return (
-    <div className="login-container">
-      <div className="login-box">
-        <div
-          style={{
-            textAlign: "center",
-            marginBottom: "2rem",
-          }}
-        >
-          <span className="brand-dot brand-dot-lg" />
+  function switchScreen(bootstrap) {
+    setIsBootstrap(bootstrap);
+    setError("");
+    setInfo("");
+  }
 
-          <h2>
-            {isBootstrap
-              ? "Configuração Inicial"
-              : "Acesso Restrito"}
-          </h2>
+  if (isBootstrap) {
+    return (
+      <div className="auth-setup">
+        <main className="auth-setup-card">
+          <img
+            className="auth-logo"
+            src="/brand/umufrio-logo.png"
+            alt="UmuFrio"
+          />
+          <h1>Configure sua operação</h1>
+          <p>Crie o acesso do responsável pelo sistema para começar.</p>
 
-          <p>
-            {isBootstrap
-              ? "Cadastre o primeiro responsável pelo sistema."
-              : "Entre para acessar o sistema UmuFrio."}
-          </p>
-        </div>
+          {error && <div className="auth-feedback auth-error" role="alert">{error}</div>}
 
-        {error && (
-          <div className="error-msg" role="alert">
-            {error}
-          </div>
-        )}
-
-        {isBootstrap ? (
-          <form
-            onSubmit={handleBootstrap}
-            className="form-grid"
-            style={{ gridTemplateColumns: "1fr" }}
-          >
-            <div className="form-group">
-              <label htmlFor="nome">Nome completo</label>
-
-              <input
-                id="nome"
-                className="input"
-                autoComplete="name"
-                value={form.nome}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    nome: event.target.value,
-                  })
-                }
-                required
-                autoFocus
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="bootstrap-email">
-                E-mail
+          <form className="auth-setup-form" onSubmit={handleBootstrap}>
+            <div className="auth-setup-grid">
+              <label className="auth-field">
+                <span>Nome completo</span>
+                <input
+                  type="text"
+                  autoComplete="name"
+                  value={form.nome}
+                  onChange={(event) =>
+                    setForm({ ...form, nome: event.target.value })
+                  }
+                  placeholder="Seu nome completo"
+                  required
+                  autoFocus
+                />
               </label>
-
-              <input
-                id="bootstrap-email"
-                type="email"
-                className="input"
-                autoComplete="email"
-                value={form.email}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    email: event.target.value,
-                  })
-                }
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="cpf">CPF</label>
-
-              <input
-                id="cpf"
-                className="input"
-                inputMode="numeric"
-                autoComplete="off"
-                value={form.cpf}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    cpf: event.target.value,
-                  })
-                }
-                required
-                placeholder="Somente números"
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="telefone">Telefone</label>
-
-              <input
-                id="telefone"
-                className="input"
-                type="tel"
-                autoComplete="tel"
-                value={form.telefone}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    telefone: event.target.value,
-                  })
-                }
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="bootstrap-senha">
-                Senha
+              <label className="auth-field">
+                <span>E-mail corporativo</span>
+                <input
+                  type="email"
+                  autoComplete="email"
+                  value={form.email}
+                  onChange={(event) =>
+                    setForm({ ...form, email: event.target.value })
+                  }
+                  placeholder="voce@empresa.com.br"
+                  required
+                />
               </label>
-
-              <input
-                id="bootstrap-senha"
-                type="password"
-                className="input"
-                autoComplete="new-password"
-                value={form.senha}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    senha: event.target.value,
-                  })
-                }
-                required
-                minLength={6}
-              />
+              <label className="auth-field">
+                <span>CPF</span>
+                <input
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={form.cpf}
+                  onChange={(event) =>
+                    setForm({ ...form, cpf: event.target.value })
+                  }
+                  placeholder="Somente números"
+                  required
+                />
+              </label>
+              <label className="auth-field">
+                <span>Telefone</span>
+                <input
+                  type="tel"
+                  autoComplete="tel"
+                  value={form.telefone}
+                  onChange={(event) =>
+                    setForm({ ...form, telefone: event.target.value })
+                  }
+                  placeholder="(00) 00000-0000"
+                  required
+                />
+              </label>
+              <label className="auth-field auth-field-full">
+                <span>Senha de acesso</span>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={form.senha}
+                  onChange={(event) =>
+                    setForm({ ...form, senha: event.target.value })
+                  }
+                  minLength={6}
+                  placeholder="Mínimo de 6 caracteres"
+                  required
+                />
+              </label>
             </div>
-
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={loading}
-              style={{ marginTop: "1rem" }}
-            >
-              {loading
-                ? "Configurando..."
-                : "Configurar CEO e entrar"}
-            </button>
-
-            <button
-              type="button"
-              className="btn-link"
-              onClick={() => {
-                setIsBootstrap(false);
-                setError("");
-              }}
-            >
-              Voltar ao login
+            <button className="auth-primary" type="submit" disabled={loading}>
+              {loading ? "Configurando..." : "Criar conta e continuar"}
             </button>
           </form>
-        ) : (
-          <form
-            onSubmit={handleLogin}
-            className="form-grid"
-            style={{ gridTemplateColumns: "1fr" }}
+          <button
+            type="button"
+            className="auth-secondary-link"
+            onClick={() => switchScreen(false)}
           >
-            <div className="form-group">
-              <label htmlFor="email">E-mail</label>
+            Voltar ao login
+          </button>
+        </main>
+      </div>
+    );
+  }
 
+  return (
+    <div className="auth-login">
+      <section className="auth-login-art" aria-label="UmuFrio Gestão Técnica">
+        <div className="auth-hero-brand">
+          <span className="auth-hero-mark"><Icon name="wind" size={23} /></span>
+          <span><strong>UmuFrio</strong><small>GESTÃO TÉCNICA</small></span>
+        </div>
+        <div className="auth-hero-features">
+          <span><Icon name="wind" size={18} /> Fluxo claro</span>
+          <span><Icon name="shield" size={18} /> Dados protegidos</span>
+        </div>
+        <div className="auth-hero-copy">
+          <h1>O dia da sua operação, sob controle.</h1>
+          <p>
+            Agendamentos, equipes, peças e ordens de serviço em um só lugar.
+            Feito para quem mantém o Brasil confortável.
+          </p>
+        </div>
+      </section>
+
+      <section className="auth-login-panel">
+        <div className="auth-form-wrap">
+          <img
+            className="auth-logo"
+            src="/brand/umufrio-logo.png"
+            alt="UmuFrio"
+          />
+          <h1>Entrar no UmuFrio</h1>
+          <p>Acesse o painel da sua empresa</p>
+          {error && <div className="auth-feedback auth-error" role="alert">{error}</div>}
+          {info && <div className="auth-feedback" role="status">{info}</div>}
+          <form className="auth-form" onSubmit={handleLogin}>
+            <label className="auth-field">
+              <span>E-mail corporativo</span>
               <input
-                id="email"
                 type="email"
                 autoComplete="username"
                 value={email}
-                onChange={(event) =>
-                  setEmail(event.target.value)
-                }
-                className="input"
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="voce@empresa.com.br"
                 required
                 autoFocus
               />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="senha">Senha</label>
-
-              <input
-                id="senha"
-                type="password"
-                autoComplete="current-password"
-                value={senha}
-                onChange={(event) =>
-                  setSenha(event.target.value)
-                }
-                className="input"
-                required
-              />
-            </div>
-
+            </label>
+            <label className="auth-field">
+              <span>Senha</span>
+              <span className="auth-password-field">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  value={senha}
+                  onChange={(event) => setSenha(event.target.value)}
+                  placeholder="Sua senha"
+                  required
+                />
+                <button
+                  type="button"
+                  aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                  onClick={() => setShowPassword((shown) => !shown)}
+                >
+                  <Icon name={showPassword ? "eyeOff" : "eye"} size={17} />
+                </button>
+              </span>
+            </label>
             <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={loading}
-              style={{ marginTop: "1rem" }}
+              type="button"
+              className="auth-forgot"
+              onClick={() =>
+                setInfo("Peça ao administrador da empresa para redefinir sua senha.")
+              }
             >
-              {loading ? "Entrando..." : "Entrar"}
+              Esqueci minha senha
             </button>
-
-            <div
-              style={{
-                textAlign: "center",
-                marginTop: "12px",
-              }}
-            >
-              <button
-                type="button"
-                className="btn-link"
-                onClick={() => {
-                  setIsBootstrap(true);
-                  setError("");
-                }}
-                style={{
-                  fontSize: "0.8rem",
-                  color: "var(--grey)",
-                }}
-              >
-                Configurar primeiro CEO
-              </button>
-            </div>
+            <button className="auth-primary" type="submit" disabled={loading}>
+              {loading ? "Entrando..." : "Entrar no painel"}
+            </button>
           </form>
-        )}
-      </div>
+          <p className="auth-switch">
+            Primeiro acesso?{" "}
+            <button type="button" onClick={() => switchScreen(true)}>
+              Configure sua conta
+            </button>
+          </p>
+        </div>
+      </section>
     </div>
   );
 }

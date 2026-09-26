@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { usuarios } from "../db/schema.js";
 import {
@@ -22,6 +22,34 @@ function usuarioSeguro(usuario) {
   const { senhaHash, ...dados } = usuario;
   return dados;
 }
+
+router.get(
+  "/tecnicos",
+  roles("ceo", "atendente"),
+  async (_req, res, next) => {
+    try {
+      const rows = await db
+        .select({
+          id: usuarios.id,
+          nome: usuarios.nome,
+          perfil: usuarios.perfil,
+          ativo: usuarios.ativo,
+        })
+        .from(usuarios)
+        .where(
+          and(
+            eq(usuarios.perfil, "tecnico"),
+            eq(usuarios.ativo, 1),
+          ),
+        )
+        .orderBy(usuarios.nome);
+
+      res.json(rows);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 router.get(
   "/",

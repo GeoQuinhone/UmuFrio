@@ -1,71 +1,33 @@
 import React from "react";
-
-import { useAuth } from "../AuthContext.jsx";
+import Icon from "./Icon.jsx";
 
 export default function Layout({
   title,
   subtitle,
   onBack,
+  action,
   children,
 }) {
-  const { user, logout } = useAuth();
-
   return (
-    <div className="page">
-      <header className="page-header">
-        <div className="page-header-left">
+    <section className="module-view">
+      <header className="module-heading">
+        <div className="module-heading-copy">
           {onBack && (
-            <button className="btn-link" onClick={onBack}>
-              ← Voltar à tela inicial
+            <button
+              type="button"
+              className="module-back"
+              onClick={onBack}
+            >
+              <Icon name="chevronLeft" size={15} />
+              Início
             </button>
           )}
-
           <h1>{title}</h1>
-
-          {subtitle && (
-            <p className="subtitle">{subtitle}</p>
-          )}
+          {subtitle && <p className="subtitle">{subtitle}</p>}
         </div>
-
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-end",
-            gap: "8px",
-          }}
-        >
-          <div className="brand-mini">
-            <span className="brand-dot" />
-            UmuFrio
-          </div>
-
-          {user && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-                color: "var(--grey)",
-                fontSize: "0.85rem",
-              }}
-            >
-              <span>
-                {user.nome} ({user.perfil})
-              </span>
-
-              <button
-                onClick={logout}
-                className="btn-link"
-              >
-                Sair
-              </button>
-            </div>
-          )}
-        </div>
+        {action && <div className="module-heading-action">{action}</div>}
       </header>
-
-      <main className="page-content">{children}</main>
-    </div>
+      <div className="module-content">{children}</div>
+    </section>
   );
 }
