@@ -1,3 +1,4 @@
+import { pathToFileURL } from "node:url";
 import "../loadEnv.js";
 import { pool } from "./client.js";
 
@@ -181,7 +182,7 @@ export async function runMigrations(client) {
   await client.query("COMMIT");
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const client = await pool.connect();
   try {
     await runMigrations(client);
