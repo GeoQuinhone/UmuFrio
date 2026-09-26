@@ -1,134 +1,345 @@
 import React, { useState } from "react";
 import Layout from "../components/Layout.jsx";
-import { Field, TextInput, Select, Badge, EmptyState, ErrorBanner } from "../components/FormControls.jsx";
+import {
+  Field,
+  TextInput,
+  Select,
+  Badge,
+  EmptyState,
+  ErrorBanner,
+} from "../components/FormControls.jsx";
 
-const emptyForm = { nome: "", email: "", telefone: "", perfil: "atendente", senha: "" };
-const PERFIL_LABEL = { ceo: "CEO", atendente: "Atendente", estoquista: "Estoquista", tecnico: "Técnico" };
+const FORM_VAZIO = {
+  nome: "",
+  cpf: "",
+  email: "",
+  telefone: "",
+  perfil: "atendente",
+  senha: "",
+};
+
+const PERFIL_LABEL = {
+  ceo: "CEO",
+  atendente: "Atendente",
+  estoquista: "Estoquista",
+  tecnico: "Técnico",
+};
+
+function somenteDigitos(valor) {
+  return (valor || "").replace(/\D/g, "");
+}
 
 export default function Usuarios({ crud, onBack }) {
-  const { items, loading, error, add, update, remove } = crud;
-  const [form, setForm] = useState(emptyForm);
+  const {
+    items,
+    loading,
+    error,
+    add,
+    update,
+    remove,
+    action,
+  } = crud;
+
+  const [form, setForm] = useState(FORM_VAZIO);
   const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [errors, setErrors] = useState({});
   const [banner, setBanner] = useState("");
   const [saving, setSaving] = useState(false);
 
-  function startNew() {
-    setForm(emptyForm);
+  function iniciarNovo() {
+    setForm(FORM_VAZIO);
     setEditingId(null);
     setErrors({});
     setShowForm(true);
   }
 
-  function startEdit(usuario) {
-    setForm({ nome: usuario.nome, email: usuario.email, telefone: usuario.telefone, perfil: usuario.perfil, senha: "" });
+  function iniciarEdicao(usuario) {
+    setForm({
+      nome: usuario.nome || "",
+      cpf: usuario.cpf || "",
+      email: usuario.email || "",
+      telefone: usuario.telefone || "",
+      perfil: usuario.perfil || "atendente",
+      senha: "",
+    });
+
     setEditingId(usuario.id);
     setErrors({});
     setShowForm(true);
   }
 
-  function validate() {
-    const e = {};
-    if (!form.nome.trim()) e.nome = "Informe o nome.";
-    if (!form.email.trim()) e.email = "Informe o e-mail.";
-    else if (!/^\S+@\S+\.\S+$/.test(form.email)) e.email = "E-mail inválido.";
-    if (!form.telefone.trim()) e.telefone = "Informe o telefone.";
+  function validar() {
+    const novosErros = {};
 
-    if (!e.email) {
-      const duplicado = items.some((u) => u.email.toLowerCase() === form.email.trim().toLowerCase() && u.id !== editingId);
-      if (duplicado) e.email = "Já existe um usuário com este e-mail.";
+    if (!form.nome.trim()) {
+      novosErros.nome = "Informe o nome.";
     }
+
+    if (!editingId && !form.cpf.trim()) {
+      novosErros.cpf = "Informe o CPF.";
+    } else if (
+      !editingId &&
+      somenteDigitos(form.cpf).length !== 11
+    ) {
+      novosErros.cpf = "CPF deve possuir 11 dígitos.";
+    }
+
+    if (!form.email.trim()) {
+      novosErros.email = "Informe o e-mail.";
+    } else if (
+      !/^\S+@\S+\.\S+$/.test(form.email)
+    ) {
+      novosErros.email = "E-mail inválido.";
+    }
+
+    if (!form.telefone.trim()) {
+      novosErros.telefone = "Informe o telefone.";
+    }
+
+    const emailDuplicado = items.some(
+      (usuario) =>
+        usuario.email?.toLowerCase() ===
+          form.email.trim().toLowerCase() &&
+        usuario.id !== editingId,
+    );
+
+    if (!novosErros.email && emailDuplicado) {
+      novosErros.email =
+        "Já existe um usuário com este e-mail.";
+    }
+
     if (!editingId || form.senha) {
-      if (form.senha.length < 6) e.senha = "A senha deve ter no mínimo 6 caracteres.";
+      if (form.senha.length < 6) {
+        novosErros.senha =
+          "A senha deve possuir no mínimo 6 caracteres.";
+      }
     }
-    setErrors(e);
-    return Object.keys(e).length === 0;
+
+    setErrors(novosErros);
+
+    return Object.keys(novosErros).length === 0;
   }
 
-  async function handleSubmit(ev) {
-    ev.preventDefault();
-    if (!validate()) return;
+  async function salvar(event) {
+    event.preventDefault();
+
+    if (!validar()) {
+      return;
+    }
+
     setSaving(true);
+
     try {
       if (editingId) {
-        const patch = { nome: form.nome, telefone: form.telefone, perfil: form.perfil };
-        if (form.senha) patch.senha = form.senha;
-        await update(editingId, patch);
+        const dados = {
+          nome: form.nome,
+          telefone: form.telefone,
+          perfil: form.perfil,
+        };
+
+        if (form.senha) {
+          dados.senha = form.senha;
+        }
+
+        await update(editingId, dados);
       } else {
-        await add({ nome: form.nome, email: form.email, telefone: form.telefone, perfil: form.perfil, senha: form.senha });
+        await add({
+          nome: form.nome,
+          cpf: form.cpf,
+          email: form.email,
+          telefone: form.telefone,
+          perfil: form.perfil,
+          senha: form.senha,
+        });
       }
+
       setShowForm(false);
-      setForm(emptyForm);
+      setForm(FORM_VAZIO);
       setEditingId(null);
       setBanner("");
-    } catch (e) {
-      setBanner(e.message);
+    } catch (saveError) {
+      setBanner(saveError.message);
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleRemove(usuario) {
-    if (!window.confirm(`Remover o usuário "${usuario.nome}"?`)) return;
+  async function alternarStatus(usuario) {
+    try {
+      await action(usuario.id, "/status");
+      setBanner("");
+    } catch (actionError) {
+      setBanner(actionError.message);
+    }
+  }
+
+  async function remover(usuario) {
+    const confirmado = window.confirm(
+      `Remover o usuário "${usuario.nome}"?`,
+    );
+
+    if (!confirmado) {
+      return;
+    }
+
     try {
       await remove(usuario.id);
-    } catch (e) {
-      setBanner(e.message);
+    } catch (removeError) {
+      setBanner(removeError.message);
     }
   }
 
   return (
-    <Layout title="Usuários e Técnicos" subtitle="Cadastrar usuários e definir perfis de acesso." onBack={onBack}>
-      <ErrorBanner message={error || banner} onClose={() => setBanner("")} />
+    <Layout
+      title="Usuários e Técnicos"
+      subtitle="Cadastrar usuários e definir perfis de acesso."
+      onBack={onBack}
+    >
+      <ErrorBanner
+        message={error || banner}
+        onClose={() => setBanner("")}
+      />
 
       <div className="toolbar">
-        <button className="btn-primary" onClick={startNew}>
+        <button
+          className="btn-primary"
+          onClick={iniciarNovo}
+        >
           + Novo usuário
         </button>
       </div>
 
       {showForm && (
-        <form className="form-card" onSubmit={handleSubmit}>
-          <h3>{editingId ? "Editar usuário" : "Novo usuário"}</h3>
+        <form
+          className="form-card"
+          onSubmit={salvar}
+        >
+          <h3>
+            {editingId ? "Editar usuário" : "Novo usuário"}
+          </h3>
+
           <div className="form-grid">
-            <Field label="Nome" error={errors.nome}>
-              <TextInput value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} placeholder="Nome completo" />
+            <Field
+              label="Nome"
+              error={errors.nome}
+            >
+              <TextInput
+                value={form.nome}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    nome: event.target.value,
+                  })
+                }
+                placeholder="Nome completo"
+              />
             </Field>
-            <Field label="E-mail" error={errors.email}>
+
+            <Field
+              label="CPF"
+              error={errors.cpf}
+            >
+              <TextInput
+                value={form.cpf}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    cpf: event.target.value,
+                  })
+                }
+                placeholder="000.000.000-00"
+                disabled={Boolean(editingId)}
+              />
+            </Field>
+
+            <Field
+              label="E-mail"
+              error={errors.email}
+            >
               <TextInput
                 type="email"
                 value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    email: event.target.value,
+                  })
+                }
                 placeholder="nome@empresa.com"
                 disabled={Boolean(editingId)}
               />
             </Field>
-            <Field label="Telefone" error={errors.telefone}>
-              <TextInput value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} placeholder="(00) 00000-0000" />
+
+            <Field
+              label="Telefone"
+              error={errors.telefone}
+            >
+              <TextInput
+                value={form.telefone}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    telefone: event.target.value,
+                  })
+                }
+                placeholder="(00) 00000-0000"
+              />
             </Field>
+
             <Field label="Perfil de acesso">
-              <Select value={form.perfil} onChange={(e) => setForm({ ...form, perfil: e.target.value })}>
+              <Select
+                value={form.perfil}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    perfil: event.target.value,
+                  })
+                }
+              >
                 <option value="ceo">CEO</option>
                 <option value="atendente">Atendente</option>
                 <option value="estoquista">Estoquista</option>
                 <option value="tecnico">Técnico</option>
               </Select>
             </Field>
-            <Field label={editingId ? "Nova senha (opcional)" : "Senha"} error={errors.senha}>
+
+            <Field
+              label={
+                editingId
+                  ? "Redefinir senha (opcional)"
+                  : "Senha inicial"
+              }
+              error={errors.senha}
+            >
               <TextInput
                 type="password"
                 value={form.senha}
-                onChange={(e) => setForm({ ...form, senha: e.target.value })}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    senha: event.target.value,
+                  })
+                }
                 placeholder="Mínimo 6 caracteres"
               />
             </Field>
           </div>
+
           <div className="form-actions">
-            <button type="button" className="btn-ghost" onClick={() => setShowForm(false)}>
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => setShowForm(false)}
+            >
               Cancelar
             </button>
-            <button type="submit" className="btn-primary" disabled={saving}>
+
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={saving}
+            >
               {saving ? "Salvando..." : "Salvar"}
             </button>
           </div>
@@ -140,39 +351,84 @@ export default function Usuarios({ crud, onBack }) {
       ) : items.length === 0 ? (
         <EmptyState text="Nenhum usuário cadastrado ainda." />
       ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Nome</th>
-              <th>E-mail</th>
-              <th>Telefone</th>
-              <th>Perfil</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((u) => (
-              <tr key={u.id}>
-                <td>{u.nome}</td>
-                <td>{u.email}</td>
-                <td>{u.telefone}</td>
-                <td>
-                  <Badge tone={u.perfil === "tecnico" ? "blue" : u.perfil === "ceo" ? "amber" : "grey"}>
-                    {PERFIL_LABEL[u.perfil]}
-                  </Badge>
-                </td>
-                <td className="row-actions">
-                  <button className="btn-link" onClick={() => startEdit(u)}>
-                    Editar
-                  </button>
-                  <button className="btn-link btn-link-danger" onClick={() => handleRemove(u)}>
-                    Remover
-                  </button>
-                </td>
+        <div className="table-responsive">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>E-mail</th>
+                <th>Telefone</th>
+                <th>Perfil</th>
+                <th>Status</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+
+            <tbody>
+              {items.map((usuario) => (
+                <tr key={usuario.id}>
+                  <td>{usuario.nome}</td>
+                  <td>{usuario.email}</td>
+                  <td>{usuario.telefone}</td>
+                  <td>
+                    <Badge
+                      tone={
+                        usuario.perfil === "tecnico"
+                          ? "blue"
+                          : usuario.perfil === "ceo"
+                            ? "amber"
+                            : "grey"
+                      }
+                    >
+                      {PERFIL_LABEL[usuario.perfil]}
+                    </Badge>
+                  </td>
+                  <td>
+                    <Badge
+                      tone={
+                        usuario.ativo
+                          ? "green"
+                          : "grey"
+                      }
+                    >
+                      {usuario.ativo
+                        ? "Ativo"
+                        : "Inativo"}
+                    </Badge>
+                  </td>
+                  <td className="row-actions">
+                    <button
+                      className="btn-link"
+                      onClick={() =>
+                        iniciarEdicao(usuario)
+                      }
+                    >
+                      Editar
+                    </button>
+
+                    <button
+                      className="btn-link"
+                      onClick={() =>
+                        alternarStatus(usuario)
+                      }
+                    >
+                      {usuario.ativo
+                        ? "Inativar"
+                        : "Ativar"}
+                    </button>
+
+                    <button
+                      className="btn-link btn-link-danger"
+                      onClick={() => remover(usuario)}
+                    >
+                      Remover
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </Layout>
   );
