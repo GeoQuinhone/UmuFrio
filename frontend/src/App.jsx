@@ -1,63 +1,73 @@
 import React, { useState } from "react";
-
 import Welcome from "./pages/Welcome.jsx";
 import Clientes from "./pages/Clientes.jsx";
 import Agendamentos from "./pages/Agendamentos.jsx";
 import OrdensServico from "./pages/OrdensServico.jsx";
 import Estoque from "./pages/Estoque.jsx";
 import Usuarios from "./pages/Usuarios.jsx";
+import Servicos from "./pages/Servicos.jsx";
 import Login from "./pages/Login.jsx";
 import PrimeiroAcesso from "./pages/PrimeiroAcesso.jsx";
-
 import { useApiCrud } from "./hooks/useApiCrud.js";
-import { AuthProvider, useAuth } from "./AuthContext.jsx";
+import {
+  AuthProvider,
+  useAuth,
+} from "./AuthContext.jsx";
 
 function AppContent() {
   const { user, loading } = useAuth();
   const [page, setPage] = useState("welcome");
 
-  const acessoLiberado = Boolean(user && !user.primeiroAcesso);
+  const podeClientes =
+    user?.perfil === "ceo" ||
+    user?.perfil === "atendente";
 
-  const isAtendenteOuCeo =
-    acessoLiberado &&
-    (user.perfil === "ceo" || user.perfil === "atendente");
+  const podeUsuarios =
+    user?.perfil === "ceo";
 
-  const isEstoquistaOuCeo =
-    acessoLiberado &&
-    (user.perfil === "ceo" || user.perfil === "estoquista");
+  const podeMovimentarEstoque =
+    user?.perfil === "ceo" ||
+    user?.perfil === "estoquista";
 
-  const isCeo = acessoLiberado && user.perfil === "ceo";
+  const podeConsultarProdutos =
+    podeMovimentarEstoque ||
+    podeClientes;
 
-  const podeVerAgenda =
-    acessoLiberado &&
-    ["ceo", "atendente", "tecnico"].includes(user.perfil);
+  const podeAgenda = Boolean(
+    user &&
+      ["ceo", "atendente", "tecnico"].includes(
+        user.perfil,
+      ),
+  );
 
   const clientes = useApiCrud("/clientes", {
-    enabled: isAtendenteOuCeo,
+    enabled: podeClientes,
   });
 
   const usuarios = useApiCrud("/usuarios", {
-    enabled: isCeo,
+    enabled: podeUsuarios,
   });
 
   const agendamentos = useApiCrud("/agendamentos", {
-    enabled: podeVerAgenda,
+    enabled: podeAgenda,
   });
 
   const ordensServico = useApiCrud("/ordens-servico", {
-    enabled: podeVerAgenda,
+    enabled: podeAgenda,
   });
 
   const estoque = useApiCrud("/produtos", {
-    enabled: isEstoquistaOuCeo,
+    enabled: podeConsultarProdutos,
+  });
+
+  const servicos = useApiCrud("/servicos", {
+    enabled: podeClientes,
   });
 
   if (loading) {
     return (
-      <div className="login-container">
-        <div className="login-box">
-          <p>Carregando sessão...</p>
-        </div>
+      <div className="layout">
+        Carregando...
       </div>
     );
   }
@@ -70,7 +80,7 @@ function AppContent() {
     return <PrimeiroAcesso />;
   }
 
-  function goHome() {
+  function voltarParaInicio() {
     setPage("welcome");
   }
 
@@ -79,8 +89,7 @@ function AppContent() {
       return (
         <Clientes
           crud={clientes}
-          agendamentos={agendamentos}
-          onBack={goHome}
+          onBack={voltarParaInicio}
         />
       );
 
@@ -90,7 +99,7 @@ function AppContent() {
           crud={agendamentos}
           clientes={clientes}
           usuarios={usuarios}
-          onBack={goHome}
+          onBack={voltarParaInicio}
         />
       );
 
@@ -101,18 +110,42 @@ function AppContent() {
           agendamentos={agendamentos}
           clientes={clientes}
           usuarios={usuarios}
-          onBack={goHome}
+          servicos={servicos}
+          onBack={voltarParaInicio}
         />
       );
 
     case "estoque":
-      return <Estoque crud={estoque} onBack={goHome} />;
+      return (
+        <Estoque
+          crud={estoque}
+          onBack={voltarParaInicio}
+        />
+      );
 
     case "usuarios":
-      return <Usuarios crud={usuarios} onBack={goHome} />;
+      return (
+        <Usuarios
+          crud={usuarios}
+          onBack={voltarParaInicio}
+        />
+      );
+
+    case "servicos":
+      return (
+        <Servicos
+          crud={servicos}
+          estoque={estoque}
+          onBack={voltarParaInicio}
+        />
+      );
 
     default:
-      return <Welcome onNavigate={setPage} />;
+      return (
+        <Welcome
+          onNavigate={setPage}
+        />
+      );
   }
 }
 
