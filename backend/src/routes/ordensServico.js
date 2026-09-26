@@ -1,127 +1,410 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import {
+  and,
+  eq,
+  sql,
+} from "drizzle-orm";
 import { db } from "../db/client.js";
-import { ordensServico, agendamentos, servicos, servicoPecas, produtos, movimentacoesEstoque } from "../db/schema.js";
+import {
+  ordensServico,
+  agendamentos,
+  servicos,
+  servicoPecas,
+  produtos,
+  movimentacoesEstoque,
+} from "../db/schema.js";
+import {
+  roles,
+  validId,
+} from "../security.js";
 
 const router = Router();
 
-const STATUS_FLOW = ["aberta", "andamento", "concluida"];
+router.get(
+  "/",
+  roles("ceo", "atendente", "tecnico"),
+  async (req, res, next) => {
+    try {
+      const rows = await db
+        .select()
+        .from(ordensServico);
 
-
-router.get("/", async (req, res, next) => {
-  try {
-    const rows = await db.select().from(ordensServico);
-    res.json(rows);
-  } catch (err) {
-    next(err);
-  }
-});
-
-//  (RN-01: só depois de agendamento confirmado; RN-02: 1 OS por agendamento; exige o serviço prestado)
-router.post("/", async (req, res, next) => {
-  try {
-    const { agendamentoId, servicoId } = req.body;
-    if (!agendamentoId) {
-      return res.status(400).json({ error: "Selecione um agendamento confirmado." });
-    }
-    if (!servicoId) {
-      return res.status(400).json({ error: "Selecione o serviço que será prestado." });
-    }
-
-    const [agendamento] = await db.select().from(agendamentos).where(eq(agendamentos.id, agendamentoId));
-    if (!agendamento || agendamento.status !== "agendado") {
-      return res.status(400).json({ error: "O agendamento selecionado não está confirmado." });
-    }
-
-    const [servico] = await db.select().from(servicos).where(eq(servicos.id, servicoId));
-    if (!servico) {
-      return res.status(400).json({ error: "Serviço não encontrado." });
-    }
-
-    const existentes = await db.select().from(ordensServico).where(eq(ordensServico.agendamentoId, agendamentoId));
-    if (existentes.length > 0) {
-      return res.status(409).json({ error: "Este agendamento já possui uma ordem de serviço." });
-    }
-
-    const [created] = await db
-      .insert(ordensServico)
-      .values({ agendamentoId, servicoId, status: "aberta" })
-      .returning();
-    res.status(201).json(created);
-  } catch (err) {
-    next(err);
-  }
-});
-
-// RN-02: status só avança, nunca volta
-// Regra de negócio central: ao entrar em "andamento", debita do estoque as peças
-// vinculadas ao serviço da OS (tabela servico_pecas), na quantidade configurada,
-// e registra a movimentação (tipo "saida") vinculada a esta OS.
-router.patch("/:id/avancar", async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-    const [current] = await db.select().from(ordensServico).where(eq(ordensServico.id, id));
-    if (!current) return res.status(404).json({ error: "Ordem de serviço não encontrada." });
-
-    const idx = STATUS_FLOW.indexOf(current.status);
-    if (idx === STATUS_FLOW.length - 1) {
-      return res.status(409).json({ error: "Esta ordem de serviço já está concluída." });
-    }
-    const proximo = STATUS_FLOW[idx + 1];
-
-    // Transação: ou debita tudo certinho, ou nada é alterado (evita estoque
-    // debitado parcialmente se faltar peça no meio do caminho).
-    const updated = await db.transaction(async (tx) => {
-      if (proximo === "andamento") {
-        const pecasNecessarias = await tx
+      if (req.usuario.perfil === "tecnico") {
+        const agendaTecnico = await db
           .select({
-            produtoId: servicoPecas.produtoId,
-            quantidadeNecessaria: servicoPecas.quantidadeNecessaria,
-            produtoNome: produtos.nome,
-            saldo: produtos.saldo,
+            id: agendamentos.id,
           })
-          .from(servicoPecas)
-          .innerJoin(produtos, eq(servicoPecas.produtoId, produtos.id))
-          .where(eq(servicoPecas.servicoId, current.servicoId));
+          .from(agendamentos)
+          .where(
+            eq(
+              agendamentos.tecnicoId,
+              req.usuario.id,
+            ),
+          );
 
-        // Confere se há saldo suficiente de todas as peças antes de debitar qualquer uma
-        for (const peca of pecasNecessarias) {
-          if (peca.saldo < peca.quantidadeNecessaria) {
-            const err = new Error(
-              `Estoque insuficiente de "${peca.produtoNome}" para iniciar este serviço (necessário: ${peca.quantidadeNecessaria}, disponível: ${peca.saldo}).`,
-            );
-            err.status = 409;
-            throw err;
-          }
-        }
+        const agendamentoIds = new Set(
+          agendaTecnico.map(
+            (agendamento) => agendamento.id,
+          ),
+        );
 
-        for (const peca of pecasNecessarias) {
-          await tx
-            .update(produtos)
-            .set({ saldo: peca.saldo - peca.quantidadeNecessaria })
-            .where(eq(produtos.id, peca.produtoId));
-          await tx.insert(movimentacoesEstoque).values({
-            produtoId: peca.produtoId,
-            usuarioId: req.body.usuarioId ?? null,
-            ordemServicoId: id,
-            tipo: "saida",
-            quantidade: peca.quantidadeNecessaria,
+        return res.json(
+          rows.filter((ordem) =>
+            agendamentoIds.has(
+              ordem.agendamentoId,
+            ),
+          ),
+        );
+      }
+
+      res.json(rows);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.get(
+  "/:id",
+  roles("ceo", "atendente", "tecnico"),
+  async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!validId(id)) {
+        return res.status(400).json({
+          error: "ID inválido.",
+        });
+      }
+
+      const rows = await db
+        .select()
+        .from(ordensServico)
+        .where(eq(ordensServico.id, id));
+
+      const ordem = rows[0];
+
+      if (!ordem) {
+        return res.status(404).json({
+          error:
+            "Ordem de serviço não encontrada.",
+        });
+      }
+
+      if (req.usuario.perfil === "tecnico") {
+        const agendaTecnico = await db
+          .select()
+          .from(agendamentos)
+          .where(
+            and(
+              eq(
+                agendamentos.id,
+                ordem.agendamentoId,
+              ),
+              eq(
+                agendamentos.tecnicoId,
+                req.usuario.id,
+              ),
+            ),
+          );
+
+        if (!agendaTecnico[0]) {
+          return res.status(403).json({
+            error: "Acesso negado.",
           });
         }
       }
 
-      const [row] = await tx
-        .update(ordensServico)
-        .set({ status: proximo, concluidaEm: proximo === "concluida" ? new Date() : current.concluidaEm })
-        .where(eq(ordensServico.id, id))
-        .returning();
-      return row;
-    });
+      res.json(ordem);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
-    res.json(updated);
-  } catch (err) {
-    next(err);
-  }
-});
+router.post(
+  "/",
+  roles("ceo", "atendente"),
+  async (req, res, next) => {
+    try {
+      const {
+        agendamentoId,
+        servicoId,
+      } = req.body;
+
+      const agendamentoIdNumerico =
+        Number(agendamentoId);
+
+      const servicoIdNumerico =
+        Number(servicoId);
+
+      if (
+        !validId(agendamentoIdNumerico) ||
+        !validId(servicoIdNumerico)
+      ) {
+        return res.status(400).json({
+          error:
+            "Selecione um agendamento e um serviço.",
+        });
+      }
+
+      const ordem = await db.transaction(
+        async (tx) => {
+          const agendamentosEncontrados = await tx
+            .select()
+            .from(agendamentos)
+            .where(
+              eq(
+                agendamentos.id,
+                agendamentoIdNumerico,
+              ),
+            );
+
+          const agendamento =
+            agendamentosEncontrados[0];
+
+          if (
+            !agendamento ||
+            agendamento.status !== "agendado"
+          ) {
+            const error = new Error(
+              "O agendamento selecionado não está confirmado.",
+            );
+            error.status = 400;
+            throw error;
+          }
+
+          const servicosEncontrados = await tx
+            .select()
+            .from(servicos)
+            .where(
+              eq(
+                servicos.id,
+                servicoIdNumerico,
+              ),
+            );
+
+          if (!servicosEncontrados[0]) {
+            const error = new Error(
+              "Serviço não encontrado.",
+            );
+            error.status = 400;
+            throw error;
+          }
+
+          const ordensExistentes = await tx
+            .select()
+            .from(ordensServico)
+            .where(
+              eq(
+                ordensServico.agendamentoId,
+                agendamentoIdNumerico,
+              ),
+            );
+
+          if (ordensExistentes.length > 0) {
+            const error = new Error(
+              "Este agendamento já possui uma ordem de serviço.",
+            );
+            error.status = 409;
+            throw error;
+          }
+
+          const [criada] = await tx
+            .insert(ordensServico)
+            .values({
+              agendamentoId: agendamentoIdNumerico,
+              servicoId: servicoIdNumerico,
+              status: "aberta",
+            })
+            .returning();
+
+          return criada;
+        },
+      );
+
+      res.status(201).json(ordem);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.patch(
+  "/:id/avancar",
+  roles("ceo", "atendente", "tecnico"),
+  async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!validId(id)) {
+        return res.status(400).json({
+          error: "ID inválido.",
+        });
+      }
+
+      const ordemAtualizada = await db.transaction(
+        async (tx) => {
+          const ordensEncontradas = await tx
+            .select()
+            .from(ordensServico)
+            .where(eq(ordensServico.id, id));
+
+          const ordem = ordensEncontradas[0];
+
+          if (!ordem) {
+            const error = new Error(
+              "Ordem de serviço não encontrada.",
+            );
+            error.status = 404;
+            throw error;
+          }
+
+          const agendamentosEncontrados = await tx
+            .select()
+            .from(agendamentos)
+            .where(
+              eq(
+                agendamentos.id,
+                ordem.agendamentoId,
+              ),
+            );
+
+          const agendamento =
+            agendamentosEncontrados[0];
+
+          if (
+            req.usuario.perfil === "tecnico" &&
+            agendamento?.tecnicoId !== req.usuario.id
+          ) {
+            const error = new Error(
+              "Você não pode alterar esta ordem de serviço.",
+            );
+            error.status = 403;
+            throw error;
+          }
+
+          const proximoStatus =
+            ordem.status === "aberta"
+              ? "andamento"
+              : ordem.status === "andamento"
+                ? "concluida"
+                : null;
+
+          if (!proximoStatus) {
+            const error = new Error(
+              "Esta ordem de serviço já está concluída.",
+            );
+            error.status = 409;
+            throw error;
+          }
+
+          if (proximoStatus === "andamento") {
+            const pecas = await tx
+              .select({
+                produtoId: servicoPecas.produtoId,
+                quantidade:
+                  servicoPecas.quantidadeNecessaria,
+                nome: produtos.nome,
+                saldo: produtos.saldo,
+              })
+              .from(servicoPecas)
+              .innerJoin(
+                produtos,
+                eq(
+                  servicoPecas.produtoId,
+                  produtos.id,
+                ),
+              )
+              .where(
+                eq(
+                  servicoPecas.servicoId,
+                  ordem.servicoId,
+                ),
+              );
+
+            for (const peca of pecas) {
+              if (peca.saldo < peca.quantidade) {
+                const error = new Error(
+                  `Estoque insuficiente de "${peca.nome}". Necessário: ${peca.quantidade}. Disponível: ${peca.saldo}.`,
+                );
+                error.status = 409;
+                throw error;
+              }
+            }
+
+            for (const peca of pecas) {
+              const [produtoAtualizado] =
+                await tx
+                  .update(produtos)
+                  .set({
+                    saldo: sql`${produtos.saldo} - ${peca.quantidade}`,
+                  })
+                  .where(
+                    and(
+                      eq(produtos.id, peca.produtoId),
+                      sql`${produtos.saldo} >= ${peca.quantidade}`,
+                    ),
+                  )
+                  .returning();
+
+              if (!produtoAtualizado) {
+                const error = new Error(
+                  "O estoque foi alterado. Atualize a tela e tente novamente.",
+                );
+                error.status = 409;
+                throw error;
+              }
+
+              await tx
+                .insert(movimentacoesEstoque)
+                .values({
+                  produtoId: peca.produtoId,
+                  usuarioId: req.usuario.id,
+                  ordemServicoId: id,
+                  tipo: "saida",
+                  quantidade: peca.quantidade,
+                });
+            }
+          }
+
+          const [atualizada] = await tx
+            .update(ordensServico)
+            .set({
+              status: proximoStatus,
+              concluidaEm:
+                proximoStatus === "concluida"
+                  ? new Date()
+                  : ordem.concluidaEm,
+            })
+            .where(
+              and(
+                eq(ordensServico.id, id),
+                eq(
+                  ordensServico.status,
+                  ordem.status,
+                ),
+              ),
+            )
+            .returning();
+
+          if (!atualizada) {
+            const error = new Error(
+              "A ordem foi alterada. Atualize a tela e tente novamente.",
+            );
+            error.status = 409;
+            throw error;
+          }
+
+          return atualizada;
+        },
+      );
+
+      res.json(ordemAtualizada);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 export default router;
