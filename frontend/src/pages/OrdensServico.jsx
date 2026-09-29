@@ -48,6 +48,7 @@ export default function OrdensServico({
   usuarios,
   tecnicos,
   servicos,
+  onBack,
 }) {
   const { user } = useAuth();
   const isTecnico = user?.perfil === "tecnico";
@@ -56,8 +57,11 @@ export default function OrdensServico({
     loading,
     error,
     add,
+    update,
+    remove,
     action,
   } = crud;
+  const podeExcluir = user?.perfil === "ceo";
   const appointmentItems = agendamentos?.items || [];
   const clientItems = clientes?.items || [];
   const userItems = usuarios?.items || [];
@@ -66,6 +70,7 @@ export default function OrdensServico({
 
   const [agendamentoId, setAgendamentoId] = useState("");
   const [servicoId, setServicoId] = useState("");
+  const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState("");
   const [banner, setBanner] = useState("");
@@ -97,7 +102,8 @@ export default function OrdensServico({
   const agendamentosDisponiveis = appointmentItems.filter(
     (appointment) =>
       appointment.status === "agendado" &&
-      !items.some((order) => order.agendamentoId === appointment.id),
+      (appointment.id === Number(agendamentoId) ||
+        !items.some((order) => order.agendamentoId === appointment.id)),
   );
 
   function startNew() {
@@ -105,8 +111,18 @@ export default function OrdensServico({
       setBanner("Não há agendamentos confirmados disponíveis para gerar uma nova ordem de serviço.");
       return;
     }
+    setEditingId(null);
     setAgendamentoId("");
     setServicoId("");
+    setFormError("");
+    setShowForm(true);
+    setBanner("");
+  }
+
+  function startEdit(order) {
+    setEditingId(order.id);
+    setAgendamentoId(String(order.agendamentoId));
+    setServicoId(String(order.servicoId));
     setFormError("");
     setShowForm(true);
     setBanner("");
@@ -121,11 +137,17 @@ export default function OrdensServico({
 
     setSaving(true);
     try {
-      await add({
+      const payload = {
         agendamentoId: Number(agendamentoId),
         servicoId: Number(servicoId),
-      });
+      };
+      if (editingId) {
+        await update(editingId, payload);
+      } else {
+        await add(payload);
+      }
       setShowForm(false);
+      setEditingId(null);
       setBanner("");
     } catch (saveError) {
       setBanner(saveError.message);
@@ -140,6 +162,18 @@ export default function OrdensServico({
       setBanner("");
     } catch (actionError) {
       setBanner(actionError.message);
+    }
+  }
+
+  async function removerOrdem(order) {
+    if (!window.confirm(`Excluir a ordem ${osCode(order.id)}? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+    try {
+      await remove(order.id);
+      setBanner("");
+    } catch (removeError) {
+      setBanner(removeError.message);
     }
   }
 
@@ -205,6 +239,7 @@ export default function OrdensServico({
     <Layout
       title="Ordens de serviço"
       subtitle="Acompanhe o atendimento desde a abertura até a conclusão."
+      onBack={onBack}
       action={!isTecnico && (
         <button
           type="button"
@@ -233,14 +268,17 @@ export default function OrdensServico({
           <form className="form-card schedule-form" onSubmit={handleSubmit}>
             <div className="schedule-form-heading">
               <div>
-                <span className="schedule-eyebrow">NOVO REGISTRO</span>
-                <h2>Nova ordem de serviço</h2>
+                <span className="schedule-eyebrow">{editingId ? "EDITAR REGISTRO" : "NOVO REGISTRO"}</span>
+                <h2>{editingId ? "Editar ordem de serviço" : "Nova ordem de serviço"}</h2>
               </div>
               <button
                 type="button"
                 className="schedule-close-form"
                 aria-label="Fechar formulário"
-                onClick={() => setShowForm(false)}
+                onClick={() => {
+                  setShowForm(false);
+                  setEditingId(null);
+                }}
               >
                 ×
               </button>
@@ -271,11 +309,18 @@ export default function OrdensServico({
             </div>
 
             <div className="form-actions">
-              <button type="button" className="btn-ghost" onClick={() => setShowForm(false)}>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => {
+                  setShowForm(false);
+                  setEditingId(null);
+                }}
+              >
                 Cancelar
               </button>
               <button type="submit" className="btn-primary" disabled={saving}>
-                {saving ? "Gerando..." : "Gerar ordem"}
+                {saving ? "Salvando..." : editingId ? "Salvar alterações" : "Gerar ordem"}
               </button>
             </div>
           </form>
@@ -387,6 +432,30 @@ export default function OrdensServico({
                               <span className="schedule-visually-hidden">
                                 Avançar para {statusLabel(nextStatus)}
                               </span>
+                            </button>
+                          )}
+                          {!isTecnico && order.status === "aberta" && (
+                            <button
+                              type="button"
+                              className="schedule-icon-action"
+                              aria-label={`Editar ${osCode(order.id)}`}
+                              title="Editar ordem de serviço"
+                              onClick={() => startEdit(order)}
+                            >
+                              <Icon name="pencil" size={16} />
+                              <span className="schedule-visually-hidden">Editar {osCode(order.id)}</span>
+                            </button>
+                          )}
+                          {podeExcluir && order.status !== "concluida" && (
+                            <button
+                              type="button"
+                              className="schedule-icon-action schedule-icon-action-danger"
+                              aria-label={`Excluir ${osCode(order.id)}`}
+                              title="Excluir ordem de serviço"
+                              onClick={() => removerOrdem(order)}
+                            >
+                              <Icon name="trash" size={16} />
+                              <span className="schedule-visually-hidden">Excluir {osCode(order.id)}</span>
                             </button>
                           )}
                         </td>

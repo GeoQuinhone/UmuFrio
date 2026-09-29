@@ -121,7 +121,7 @@ export default function AppShell({
         <div className="app-sidebar-footer">
           <span>
             <strong>UmuFrio Gestão</strong>
-            <small>Ambiente seguro</small>
+            <small>Desenvolvido pela TrinityX </small>
           </span>
         </div>
       </aside>

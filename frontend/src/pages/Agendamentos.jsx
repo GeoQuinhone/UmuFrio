@@ -69,6 +69,7 @@ export default function Agendamentos({
   tecnicos,
   createAppointmentRequestId = 0,
   onCreateAppointmentRequestHandled,
+  onBack,
 }) {
   const { user } = useAuth();
   const isTecnico = user?.perfil === "tecnico";
@@ -246,6 +247,7 @@ export default function Agendamentos({
     <Layout
       title="Agendamentos"
       subtitle="Planeje a rota da equipe e mantenha cada visita no horário."
+      onBack={onBack}
       action={!isTecnico && (
         <button
           type="button"
