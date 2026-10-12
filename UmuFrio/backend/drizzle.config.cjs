@@ -53,9 +53,7 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-// Quebramos a URL manualmente nos campos host/port/user/password/database
-// pelo mesmo motivo de robustez do parser acima (evita depender de o
-// drizzle-kit interpretar corretamente a string de conexão inteira).
+
 const dbUrl = new URL(process.env.DATABASE_URL);
 
 module.exports = defineConfig({

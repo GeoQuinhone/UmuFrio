@@ -1,7 +1,9 @@
-import mysql from "mysql2/promise";
-import { drizzle } from "drizzle-orm/mysql2";
+import pg from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "./schema.js";
 import { envPath, loadedKeys } from "../loadEnv.js";
+
+const {Pool} = pg;
 
 if (!process.env.DATABASE_URL) {
   throw new Error(
@@ -10,9 +12,9 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-export const pool = mysql.createPool({
-  uri: process.env.DATABASE_URL,
-  connectionLimit: 10,
+export const pool = new Pool ({
+ connectionString: process.env.DATABASE_URL,
+ max: 10,
 });
 
-export const db = drizzle(pool, { schema, mode: "default" });
+export const db = drizzle(pool, {schema});
