@@ -1,96 +1,281 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { usuarios } from "../db/schema.js";
+import {
+  hashPassword,
+  onlyDigits,
+  roles,
+  validId,
+  cpfValido,
+} from "../security.js";
 
 const router = Router();
 
-const PERFIS = ["ceo", "atendente", "estoquista", "tecnico"];
- 
-router.get("/", async (req, res, next) => {
-  try {
-    const rows = await db.select().from(usuarios).orderBy(usuarios.nome);
-    // nunca devolver a senha para o front
-    res.json(rows.map(({ senhaHash, ...u }) => u));
-  } catch (err) {
-    next(err);
-  }
-});
+const PERFIS = [
+  "ceo",
+  "atendente",
+  "estoquista",
+  "tecnico",
+];
 
-// seguindo a nossa regra - RN-01: e-mail único, RN-02: senha mínima 6 caracteres
-router.post("/", async (req, res, next) => {
-  try {
-    const { nome, email, telefone, perfil, senha } = req.body;
-    if (!nome?.trim() || !email?.trim() || !telefone?.trim()) {
-      return res.status(400).json({ error: "Preencha todos os campos obrigatórios." });
-    }
-    if (!/^\S+@\S+\.\S+$/.test(email)) {
-      return res.status(400).json({ error: "E-mail inválido." });
-    }
-    if (!perfil || !PERFIS.includes(perfil)) {
-      return res.status(400).json({ error: "Perfil inválido." });
-    }
-    if (!senha || senha.length < 6) {
-      return res.status(400).json({ error: "A senha deve ter no mínimo 6 caracteres." });
-    }
+function usuarioSeguro(usuario) {
+  const { senhaHash, ...dados } = usuario;
+  return dados;
+}
 
-    const existentes = await db.select().from(usuarios).where(eq(usuarios.email, email.trim().toLowerCase()));
-    if (existentes.length > 0) {
-      return res.status(409).json({ error: "Já existe um usuário com este e-mail." });
+router.get(
+  "/tecnicos",
+  roles("ceo", "atendente"),
+  async (_req, res, next) => {
+    try {
+      const rows = await db
+        .select({
+          id: usuarios.id,
+          nome: usuarios.nome,
+          perfil: usuarios.perfil,
+          ativo: usuarios.ativo,
+        })
+        .from(usuarios)
+        .where(
+          and(
+            eq(usuarios.perfil, "tecnico"),
+            eq(usuarios.ativo, 1),
+          ),
+        )
+        .orderBy(usuarios.nome);
+
+      res.json(rows);
+    } catch (error) {
+      next(error);
     }
+  },
+);
 
-    // Este protótipo é para gravar a senha como texto puro só para fins de demonstração.
-    const [result] = await db
-      .insert(usuarios)
-      .values({ nome, email: email.trim().toLowerCase(), telefone, perfil, senhaHash: senha });
-    const [created] = await db.select().from(usuarios).where(eq(usuarios.id, result.insertId));
-    const { senhaHash, ...safe } = created;
-    res.status(201).json(safe);
-  } catch (err) {
-    next(err);
-  }
-});
+router.get(
+  "/",
+  roles("ceo"),
+  async (_req, res, next) => {
+    try {
+      const rows = await db
+        .select()
+        .from(usuarios)
+        .orderBy(usuarios.nome);
 
-// PUT o e-mail não pode ser alterado
-router.put("/:id", async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-    const [current] = await db.select().from(usuarios).where(eq(usuarios.id, id));
-    if (!current) return res.status(404).json({ error: "Usuário não encontrado." });
-
-    const { nome, telefone, perfil, senha } = req.body;
-    if (!nome?.trim() || !telefone?.trim()) {
-      return res.status(400).json({ error: "Preencha todos os campos obrigatórios." });
+      res.json(rows.map(usuarioSeguro));
+    } catch (error) {
+      next(error);
     }
-    if (!perfil || !PERFIS.includes(perfil)) {
-      return res.status(400).json({ error: "Perfil inválido." });
-    }
+  },
+);
 
-    const patch = { nome, telefone, perfil };
-    if (senha) {
-      if (senha.length < 6) {
-        return res.status(400).json({ error: "A senha deve ter no mínimo 6 caracteres." });
+router.post(
+  "/",
+  roles("ceo"),
+  async (req, res, next) => {
+    try {
+      const {
+        nome,
+        email,
+        cpf,
+        telefone,
+        perfil,
+        senha,
+      } = req.body;
+
+      if (
+        !nome?.trim() ||
+        !email?.trim() ||
+        !telefone?.trim() ||
+        !senha ||
+        !PERFIS.includes(perfil)
+      ) {
+        return res.status(400).json({
+          error: "Preencha corretamente os dados do usuário.",
+        });
       }
-      patch.senhaHash = senha;
+
+      if (!cpfValido(cpf)) {
+        return res.status(400).json({
+          error: "CPF inválido.",
+        });
+      }
+
+      if (senha.length < 6) {
+        return res.status(400).json({
+          error: "A senha deve possuir no mínimo 6 caracteres.",
+        });
+      }
+
+      const emailNormalizado = email.trim().toLowerCase();
+
+      const usuarioExistente = await db
+        .select()
+        .from(usuarios)
+        .where(eq(usuarios.email, emailNormalizado));
+
+      if (usuarioExistente.length > 0) {
+        return res.status(409).json({
+          error: "Já existe um usuário com este e-mail.",
+        });
+      }
+
+      const [usuario] = await db
+        .insert(usuarios)
+        .values({
+          nome: nome.trim(),
+          email: emailNormalizado,
+          cpf: onlyDigits(cpf),
+          telefone: telefone.trim(),
+          perfil,
+          senhaHash: hashPassword(senha),
+          primeiroAcesso: 1,
+          ativo: 1,
+        })
+        .returning();
+
+      res.status(201).json(usuarioSeguro(usuario));
+    } catch (error) {
+      next(error);
     }
+  },
+);
 
-    await db.update(usuarios).set(patch).where(eq(usuarios.id, id));
-    const [updated] = await db.select().from(usuarios).where(eq(usuarios.id, id));
-    const { senhaHash, ...safe } = updated;
-    res.json(safe);
-  } catch (err) {
-    next(err);
-  }
-});
+router.put(
+  "/:id",
+  roles("ceo"),
+  async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
 
-router.delete("/:id", async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-    await db.delete(usuarios).where(eq(usuarios.id, id));
-    res.status(204).end();
-  } catch (err) {
-    next(err);
-  }
-});
+      if (!validId(id)) {
+        return res.status(400).json({
+          error: "ID inválido.",
+        });
+      }
+
+      const usuarioAtual = await db
+        .select()
+        .from(usuarios)
+        .where(eq(usuarios.id, id));
+
+      if (!usuarioAtual[0]) {
+        return res.status(404).json({
+          error: "Usuário não encontrado.",
+        });
+      }
+
+      const {
+        nome,
+        telefone,
+        perfil,
+        senha,
+      } = req.body;
+
+      if (
+        !nome?.trim() ||
+        !telefone?.trim() ||
+        !PERFIS.includes(perfil)
+      ) {
+        return res.status(400).json({
+          error: "Preencha corretamente os dados do usuário.",
+        });
+      }
+
+      if (senha && senha.length < 6) {
+        return res.status(400).json({
+          error: "A senha deve possuir no mínimo 6 caracteres.",
+        });
+      }
+
+      const dados = {
+        nome: nome.trim(),
+        telefone: telefone.trim(),
+        perfil,
+      };
+
+      if (senha) {
+        dados.senhaHash = hashPassword(senha);
+        dados.primeiroAcesso = 1;
+      }
+
+      const [usuario] = await db
+        .update(usuarios)
+        .set(dados)
+        .where(eq(usuarios.id, id))
+        .returning();
+
+      res.json(usuarioSeguro(usuario));
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.patch(
+  "/:id/status",
+  roles("ceo"),
+  async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!validId(id)) {
+        return res.status(400).json({
+          error: "ID inválido.",
+        });
+      }
+
+      const usuarioAtual = await db
+        .select()
+        .from(usuarios)
+        .where(eq(usuarios.id, id));
+
+      const usuario = usuarioAtual[0];
+
+      if (!usuario) {
+        return res.status(404).json({
+          error: "Usuário não encontrado.",
+        });
+      }
+
+      const [atualizado] = await db
+        .update(usuarios)
+        .set({
+          ativo: usuario.ativo ? 0 : 1,
+        })
+        .where(eq(usuarios.id, id))
+        .returning();
+
+      res.json(usuarioSeguro(atualizado));
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.delete(
+  "/:id",
+  roles("ceo"),
+  async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!validId(id)) {
+        return res.status(400).json({
+          error: "ID inválido.",
+        });
+      }
+
+      await db
+        .update(usuarios)
+        .set({ ativo: 0 })
+        .where(eq(usuarios.id, id));
+
+      res.status(204).end();
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 export default router;

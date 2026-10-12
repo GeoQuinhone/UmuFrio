@@ -1,103 +1,344 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import {
+  and,
+  eq,
+  lt,
+  sql,
+} from "drizzle-orm";
 import { db } from "../db/client.js";
-import { produtos, movimentacoesEstoque } from "../db/schema.js";
+import {
+  produtos,
+  movimentacoesEstoque,
+} from "../db/schema.js";
+import {
+  roles,
+  validId,
+} from "../security.js";
 
 const router = Router();
 
-router.get("/", async (req, res, next) => {
-  try {
-    const rows = await db.select().from(produtos).orderBy(produtos.nome);
-    res.json(rows);
-  } catch (err) {
-    next(err);
-  }
-});
+function quantidadeValida(valor) {
+  return (
+    Number.isInteger(Number(valor)) &&
+    Number(valor) > 0
+  );
+}
 
-router.post("/", async (req, res, next) => {
-  try {
-    const { nome, saldo } = req.body;
-    if (!nome?.trim()) {
-      return res.status(400).json({ error: "Informe o nome do produto." });
+router.get(
+  "/",
+  roles("ceo", "estoquista", "atendente"),
+  async (_req, res, next) => {
+    try {
+      const rows = await db
+        .select()
+        .from(produtos)
+        .orderBy(produtos.nome);
+
+      res.json(rows);
+    } catch (error) {
+      next(error);
     }
-    const saldoInicial = Number(saldo) || 0;
-    if (saldoInicial < 0) {
-      return res.status(400).json({ error: "O saldo inicial não pode ser negativo." });
+  },
+);
+
+// O técnico não tem acesso à lista completa de estoque (preço de custo,
+// estoque mínimo), mas precisa poder escolher uma peça para registrar um
+// consumo extra durante o atendimento (ponto 12) — por isso uma versão
+// reduzida, só com o que é necessário para esse formulário.
+router.get(
+  "/para-tecnico",
+  roles("ceo", "atendente", "estoquista", "tecnico"),
+  async (_req, res, next) => {
+    try {
+      const rows = await db
+        .select({
+          id: produtos.id,
+          nome: produtos.nome,
+          saldo: produtos.saldo,
+        })
+        .from(produtos)
+        .orderBy(produtos.nome);
+
+      res.json(rows);
+    } catch (error) {
+      next(error);
     }
+  },
+);
 
-    const [result] = await db.insert(produtos).values({ nome: nome.trim(), saldo: saldoInicial });
-    const [created] = await db.select().from(produtos).where(eq(produtos.id, result.insertId));
-    res.status(201).json(created);
-  } catch (err) {
-    next(err);
-  }
-});
+router.get(
+  "/alertas",
+  roles("ceo", "estoquista"),
+  async (_req, res, next) => {
+    try {
+      const rows = await db
+        .select()
+        .from(produtos)
+        .where(
+          lt(
+            produtos.saldo,
+            produtos.quantidadeMinima,
+          ),
+        )
+        .orderBy(produtos.nome);
 
-// PATCH seguindo a nossa regra RN-02: quantidade > 0
-router.patch("/:id/entrada", async (req, res, next) => {
+      res.json(rows);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.get(
+  "/movimentacoes",
+  roles("ceo", "estoquista"),
+  async (_req, res, next) => {
+    try {
+      const rows = await db
+        .select()
+        .from(movimentacoesEstoque)
+        .orderBy(
+          sql`${movimentacoesEstoque.data} desc`,
+        );
+
+      res.json(rows);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.post(
+  "/",
+  roles("ceo", "estoquista"),
+  async (req, res, next) => {
+    try {
+      const {
+        nome,
+        valorUnitario,
+        saldo = 0,
+        quantidadeMinima = 0,
+      } = req.body;
+
+      if (
+        !nome?.trim() ||
+        !Number.isFinite(Number(valorUnitario)) ||
+        Number(valorUnitario) < 0 ||
+        !Number.isInteger(Number(saldo)) ||
+        Number(saldo) < 0 ||
+        !Number.isInteger(Number(quantidadeMinima)) ||
+        Number(quantidadeMinima) < 0
+      ) {
+        return res.status(400).json({
+          error: "Dados do produto inválidos.",
+        });
+      }
+
+      const [produto] = await db
+        .insert(produtos)
+        .values({
+          nome: nome.trim(),
+          valorUnitario: String(valorUnitario),
+          saldo: Number(saldo),
+          quantidadeMinima: Number(
+            quantidadeMinima,
+          ),
+        })
+        .returning();
+
+      res.status(201).json(produto);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.put(
+  "/:id",
+  roles("ceo", "estoquista"),
+  async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+      const {
+        nome,
+        valorUnitario,
+        quantidadeMinima = 0,
+      } = req.body;
+
+      if (
+        !validId(id) ||
+        !nome?.trim() ||
+        !Number.isFinite(Number(valorUnitario)) ||
+        Number(valorUnitario) < 0 ||
+        !Number.isInteger(Number(quantidadeMinima)) ||
+        Number(quantidadeMinima) < 0
+      ) {
+        return res.status(400).json({
+          error: "Dados do produto inválidos.",
+        });
+      }
+
+      const [produto] = await db
+        .update(produtos)
+        .set({
+          nome: nome.trim(),
+          valorUnitario: String(valorUnitario),
+          quantidadeMinima: Number(
+            quantidadeMinima,
+          ),
+        })
+        .where(eq(produtos.id, id))
+        .returning();
+
+      if (!produto) {
+        return res.status(404).json({
+          error: "Produto não encontrado.",
+        });
+      }
+
+      res.json(produto);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+async function movimentarEstoque(
+  req,
+  res,
+  next,
+  tipo,
+) {
   try {
     const id = Number(req.params.id);
     const quantidade = Number(req.body.quantidade);
-    if (!quantidade || quantidade <= 0) {
-      return res.status(400).json({ error: "Informe uma quantidade maior que zero." });
+
+    if (
+      !validId(id) ||
+      !quantidadeValida(quantidade)
+    ) {
+      return res.status(400).json({
+        error:
+          "Informe uma quantidade inteira maior que zero.",
+      });
     }
 
-    const [produto] = await db.select().from(produtos).where(eq(produtos.id, id));
-    if (!produto) return res.status(404).json({ error: "Produto não encontrado." });
+    const resultado = await db.transaction(
+      async (tx) => {
+        const condicao =
+          tipo === "saida"
+            ? and(
+                eq(produtos.id, id),
+                sql`${produtos.saldo} >= ${quantidade}`,
+              )
+            : eq(produtos.id, id);
 
-    await db.update(produtos).set({ saldo: produto.saldo + quantidade }).where(eq(produtos.id, id));
-    await db.insert(movimentacoesEstoque).values({
-      produtoId: id,
-      usuarioId: req.body.usuarioId ?? null,
-      tipo: "entrada",
-      quantidade,
-    });
+        const [atualizado] = await tx
+          .update(produtos)
+          .set({
+            saldo:
+              tipo === "entrada"
+                ? sql`${produtos.saldo} + ${quantidade}`
+                : sql`${produtos.saldo} - ${quantidade}`,
+          })
+          .where(condicao)
+          .returning();
 
-    const [updated] = await db.select().from(produtos).where(eq(produtos.id, id));
-    res.json(updated);
-  } catch (err) {
-    next(err);
-  }
-});
+        if (!atualizado) {
+          const existente = await tx
+            .select({ id: produtos.id })
+            .from(produtos)
+            .where(eq(produtos.id, id));
 
-// saida  (RN-01: aqui o nosso crud não permite retirar mais que o saldo disponível)
-router.patch("/:id/saida", async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-    const quantidade = Number(req.body.quantidade);
-    if (!quantidade || quantidade <= 0) {
-      return res.status(400).json({ error: "Informe uma quantidade maior que zero." });
+          if (!existente[0]) {
+            return {
+              produtoNaoEncontrado: true,
+            };
+          }
+
+          const error = new Error(
+            tipo === "saida"
+              ? "Saldo insuficiente ou alterado. Tente novamente."
+              : "O produto foi alterado. Tente novamente.",
+          );
+
+          error.status = 409;
+          throw error;
+        }
+
+        await tx
+          .insert(movimentacoesEstoque)
+          .values({
+            produtoId: id,
+            usuarioId: req.usuario.id,
+            tipo,
+            quantidade,
+          });
+
+        return {
+          produto: atualizado,
+        };
+      },
+    );
+
+    if (resultado.produtoNaoEncontrado) {
+      return res.status(404).json({
+        error: "Produto não encontrado.",
+      });
     }
 
-    const [produto] = await db.select().from(produtos).where(eq(produtos.id, id));
-    if (!produto) return res.status(404).json({ error: "Produto não encontrado." });
-    if (quantidade > produto.saldo) {
-      return res.status(409).json({ error: `Saldo insuficiente de "${produto.nome}" (disponível: ${produto.saldo}).` });
+    res.json(resultado.produto);
+  } catch (error) {
+    next(error);
+  }
+}
+
+router.patch(
+  "/:id/entrada",
+  roles("ceo", "estoquista"),
+  (req, res, next) =>
+    movimentarEstoque(
+      req,
+      res,
+      next,
+      "entrada",
+    ),
+);
+
+router.patch(
+  "/:id/saida",
+  roles("ceo", "estoquista"),
+  (req, res, next) =>
+    movimentarEstoque(
+      req,
+      res,
+      next,
+      "saida",
+    ),
+);
+
+router.delete(
+  "/:id",
+  roles("ceo"),
+  async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!validId(id)) {
+        return res.status(400).json({
+          error: "ID inválido.",
+        });
+      }
+
+      await db
+        .delete(produtos)
+        .where(eq(produtos.id, id));
+
+      res.status(204).end();
+    } catch (error) {
+      next(error);
     }
-
-    await db.update(produtos).set({ saldo: produto.saldo - quantidade }).where(eq(produtos.id, id));
-    await db.insert(movimentacoesEstoque).values({
-      produtoId: id,
-      usuarioId: req.body.usuarioId ?? null,
-      tipo: "saida",
-      quantidade,
-    });
-
-    const [updated] = await db.select().from(produtos).where(eq(produtos.id, id));
-    res.json(updated);
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.delete("/:id", async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-    await db.delete(produtos).where(eq(produtos.id, id));
-    res.status(204).end();
-  } catch (err) {
-    next(err);
-  }
-});
+  },
+);
 
 export default router;
