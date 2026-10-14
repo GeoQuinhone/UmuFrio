@@ -1,24 +1,33 @@
 import React from "react";
+import Icon from "./Icon.jsx";
 
-export default function Layout({ title, subtitle, onBack, children }) {
+export default function Layout({
+  title,
+  subtitle,
+  onBack,
+  action,
+  children,
+}) {
   return (
-    <div className="page">
-      <header className="page-header">
-        <div className="page-header-left">
+    <section className="module-view">
+      <header className="module-heading">
+        <div className="module-heading-copy">
           {onBack && (
-            <button className="btn-link" onClick={onBack}>
-              ← Voltar à tela inicial
+            <button
+              type="button"
+              className="module-back"
+              onClick={onBack}
+            >
+              <Icon name="chevronLeft" size={15} />
+              Início
             </button>
           )}
           <h1>{title}</h1>
           {subtitle && <p className="subtitle">{subtitle}</p>}
         </div>
-        <div className="brand-mini">
-          <span className="brand-dot" />
-          UmuFrio
-        </div>
+        {action && <div className="module-heading-action">{action}</div>}
       </header>
-      <main className="page-content">{children}</main>
-    </div>
+      <div className="module-content">{children}</div>
+    </section>
   );
 }
