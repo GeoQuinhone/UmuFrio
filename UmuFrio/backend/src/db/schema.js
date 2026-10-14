@@ -91,6 +91,14 @@ export const ordensServico = pgTable("ordens_servico", {
   abertaEm: timestamp("aberta_em").notNull().defaultNow(),
   iniciadaEm: timestamp("iniciada_em"),
   concluidaEm: timestamp("concluida_em"),
+  // Pagamento (pontos 11 e 17): valor realmente cobrado (pode diferir do valor
+  // de tabela do serviço), forma, confirmação e observação do motivo.
+  valorCobrado: numeric("valor_cobrado", { precision: 10, scale: 2 }),
+  formaPagamento: varchar("forma_pagamento", { length: 20 }),
+  pagamentoConfirmado: integer("pagamento_confirmado").notNull().default(0),
+  pagamentoConfirmadoEm: timestamp("pagamento_confirmado_em"),
+  observacaoPagamento: varchar("observacao_pagamento", { length: 255 }),
+  pagamentoUsuarioId: integer("pagamento_usuario_id").references(() => usuarios.id),
 });
 
 export const movimentacoesEstoque = pgTable("movimentacoes_estoque", {

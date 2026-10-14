@@ -1,20 +1,26 @@
 import { Router } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { db } from "../db/client.js";
 import {
   agendamentos,
   clientes,
   usuarios,
+  servicos,
   ordensServico,
 } from "../db/schema.js";
 import { roles, validId } from "../security.js";
+import { erroHttp, excluirOrdem } from "../ordemHelpers.js";
 
 const router = Router();
 
-// Junta o agendamento com o cliente para já devolver o nome e o contato —
-// o técnico não tem acesso à lista completa de clientes, então sem isso
-// ele veria só o ID ("Cliente #3") em vez do nome.
-function selecaoComCliente() {
+// Ponto 10: o agendamento e a ordem de serviço formam um fluxo só. Cada
+// agendamento nasce com a sua OS (criada na mesma transação) e esta rota
+// devolve os dois juntos: dados do agendamento, nomes do cliente, técnico e
+// serviço, estado da OS e informações de pagamento. A junção com a OS é
+// "left" para continuar mostrando agendamentos antigos que ainda não têm OS.
+// Também devolve os nomes prontos porque o técnico não tem acesso às listas
+// completas de clientes e serviços.
+function selecaoUnificada() {
   return db
     .select({
       id: agendamentos.id,
@@ -33,12 +39,29 @@ function selecaoComCliente() {
       clienteBairro: clientes.bairro,
       clienteCidade: clientes.cidade,
       clienteEstado: clientes.estado,
+      tecnicoNome: usuarios.nome,
+      ordemId: ordensServico.id,
+      servicoId: ordensServico.servicoId,
+      servicoNome: servicos.nome,
+      servicoValor: servicos.valor,
+      ordemStatus: ordensServico.status,
+      abertaEm: ordensServico.abertaEm,
+      iniciadaEm: ordensServico.iniciadaEm,
+      concluidaEm: ordensServico.concluidaEm,
+      valorCobrado: ordensServico.valorCobrado,
+      formaPagamento: ordensServico.formaPagamento,
+      pagamentoConfirmado: ordensServico.pagamentoConfirmado,
+      pagamentoConfirmadoEm: ordensServico.pagamentoConfirmadoEm,
+      observacaoPagamento: ordensServico.observacaoPagamento,
     })
     .from(agendamentos)
-    .innerJoin(
-      clientes,
-      eq(agendamentos.clienteId, clientes.id),
-    );
+    .innerJoin(clientes, eq(agendamentos.clienteId, clientes.id))
+    .innerJoin(usuarios, eq(agendamentos.tecnicoId, usuarios.id))
+    .leftJoin(
+      ordensServico,
+      eq(ordensServico.agendamentoId, agendamentos.id),
+    )
+    .leftJoin(servicos, eq(ordensServico.servicoId, servicos.id));
 }
 
 // Converte "HH:MM" ou "HH:MM:SS" em minutos desde a meia-noite, para checar
@@ -52,12 +75,121 @@ function horarioMuitoProximo(horaA, horaB) {
   return Math.abs(minutosDoDia(horaA) - minutosDoDia(horaB)) < 60;
 }
 
+// Data de hoje no fuso do servidor (YYYY-MM-DD). Não usa toISOString porque
+// ele devolve a data em UTC, que à noite já é "amanhã" no horário do Brasil.
+function dataDeHoje() {
+  const agora = new Date();
+  const dois = (n) => String(n).padStart(2, "0");
+  return `${agora.getFullYear()}-${dois(agora.getMonth() + 1)}-${dois(agora.getDate())}`;
+}
+
+// Valida os dados de um atendimento (agendamento + serviço). Em uma edição,
+// recebe `atual` com os valores gravados: só exige cliente/técnico/serviço
+// ativos e data futura para o que de fato mudou, para não impedir a edição de
+// um atendimento só porque, por exemplo, o serviço foi inativado depois.
+async function validarAtendimento(executor, body, { id = null, atual = null } = {}) {
+  const clienteId = Number(body.clienteId);
+  const tecnicoId = Number(body.tecnicoId);
+  const servicoId = Number(body.servicoId);
+  const data = String(body.data || "");
+  const hora = String(body.hora || "").slice(0, 5);
+
+  if (
+    !validId(clienteId) ||
+    !validId(tecnicoId) ||
+    !validId(servicoId) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(data) ||
+    !/^\d{2}:\d{2}$/.test(hora)
+  ) {
+    throw erroHttp(
+      "Selecione cliente, serviço, técnico, data e horário.",
+      400,
+    );
+  }
+
+  const dataMudou = !atual || atual.data !== data;
+  const horaMudou =
+    !atual || minutosDoDia(atual.hora) !== minutosDoDia(hora);
+
+  if ((dataMudou || horaMudou) && data < dataDeHoje()) {
+    throw erroHttp(
+      "A data do agendamento deve ser hoje ou futura.",
+      400,
+    );
+  }
+
+  const [clienteRows, tecnicoRows, servicoRows, mesmoDia] =
+    await Promise.all([
+      executor.select().from(clientes).where(eq(clientes.id, clienteId)),
+      executor
+        .select()
+        .from(usuarios)
+        .where(
+          and(
+            eq(usuarios.id, tecnicoId),
+            eq(usuarios.perfil, "tecnico"),
+            eq(usuarios.ativo, 1),
+          ),
+        ),
+      executor.select().from(servicos).where(eq(servicos.id, servicoId)),
+      executor
+        .select()
+        .from(agendamentos)
+        .where(
+          and(
+            eq(agendamentos.tecnicoId, tecnicoId),
+            eq(agendamentos.data, data),
+            eq(agendamentos.status, "agendado"),
+            id ? ne(agendamentos.id, id) : undefined,
+          ),
+        ),
+    ]);
+
+  const cliente = clienteRows[0];
+
+  if (
+    !cliente ||
+    (cliente.status !== "ativo" && atual?.clienteId !== clienteId)
+  ) {
+    throw erroHttp("Selecione um cliente ativo.", 400);
+  }
+
+  if (!tecnicoRows[0]) {
+    throw erroHttp("Selecione um técnico ativo.", 400);
+  }
+
+  const servico = servicoRows[0];
+
+  if (
+    !servico ||
+    (servico.ativo !== 1 && atual?.servicoId !== servicoId)
+  ) {
+    throw erroHttp("Selecione um serviço ativo.", 400);
+  }
+
+  // Ponto 9: o mesmo técnico precisa de no mínimo 1h entre dois
+  // agendamentos no mesmo dia (não só evitar o horário exato igual).
+  if (mesmoDia.some((outro) => horarioMuitoProximo(outro.hora, hora))) {
+    throw erroHttp(
+      "Este técnico já possui um agendamento a menos de 1h de diferença nesse horário.",
+      409,
+    );
+  }
+
+  return { clienteId, tecnicoId, servicoId, data, hora };
+}
+
+async function buscarUnificado(id) {
+  const [linha] = await selecaoUnificada().where(eq(agendamentos.id, id));
+  return linha;
+}
+
 router.get(
   "/",
   roles("ceo", "atendente", "tecnico"),
   async (req, res, next) => {
     try {
-      const rows = await selecaoComCliente();
+      const rows = await selecaoUnificada();
 
       if (req.usuario.perfil === "tecnico") {
         return res.json(
@@ -80,271 +212,260 @@ router.post(
   roles("ceo", "atendente"),
   async (req, res, next) => {
     try {
-      const {
-        clienteId,
-        tecnicoId,
-        data,
-        hora,
-      } = req.body;
+      const criadoId = await db.transaction(async (tx) => {
+        const dados = await validarAtendimento(tx, req.body);
 
-      const clienteIdNumerico = Number(clienteId);
-      const tecnicoIdNumerico = Number(tecnicoId);
+        const [agendamento] = await tx
+          .insert(agendamentos)
+          .values({
+            clienteId: dados.clienteId,
+            tecnicoId: dados.tecnicoId,
+            data: dados.data,
+            hora: dados.hora,
+            status: "agendado",
+          })
+          .returning();
 
-      if (
-        !validId(clienteIdNumerico) ||
-        !validId(tecnicoIdNumerico) ||
-        !/^\d{4}-\d{2}-\d{2}$/.test(data || "") ||
-        !/^\d{2}:\d{2}/.test(hora || "")
-      ) {
-        return res.status(400).json({
-          error:
-            "Selecione cliente, técnico, data e horário.",
+        await tx.insert(ordensServico).values({
+          agendamentoId: agendamento.id,
+          servicoId: dados.servicoId,
+          status: "aberta",
         });
-      }
 
-      const hoje = new Date()
-        .toISOString()
-        .slice(0, 10);
+        return agendamento.id;
+      });
 
-      if (data < hoje) {
-        return res.status(400).json({
-          error:
-            "A data do agendamento deve ser hoje ou futura.",
-        });
-      }
-
-      const [clienteRows, tecnicoRows, conflitos] =
-        await Promise.all([
-          db
-            .select()
-            .from(clientes)
-            .where(eq(clientes.id, clienteIdNumerico)),
-
-          db
-            .select()
-            .from(usuarios)
-            .where(
-              and(
-                eq(usuarios.id, tecnicoIdNumerico),
-                eq(usuarios.perfil, "tecnico"),
-                eq(usuarios.ativo, 1),
-              ),
-            ),
-
-          db
-            .select()
-            .from(agendamentos)
-            .where(
-              and(
-                eq(
-                  agendamentos.tecnicoId,
-                  tecnicoIdNumerico,
-                ),
-                eq(agendamentos.data, data),
-                eq(
-                  agendamentos.status,
-                  "agendado",
-                ),
-              ),
-            ),
-        ]);
-
-      const cliente = clienteRows[0];
-      const tecnico = tecnicoRows[0];
-
-      if (!cliente || cliente.status !== "ativo") {
-        return res.status(400).json({
-          error: "Selecione um cliente ativo.",
-        });
-      }
-
-      if (!tecnico) {
-        return res.status(400).json({
-          error: "Selecione um técnico ativo.",
-        });
-      }
-
-      // Ponto 9: o mesmo técnico precisa de no mínimo 1h de intervalo entre
-      // dois agendamentos no mesmo dia (não só evitar o horário exato igual).
-      const conflito = conflitos.some((agendamento) =>
-        horarioMuitoProximo(agendamento.hora, hora),
-      );
-
-      if (conflito) {
-        return res.status(409).json({
-          error:
-            "Este técnico já possui um agendamento a menos de 1h de diferença nesse horário.",
-        });
-      }
-
-      const [agendamento] = await db
-        .insert(agendamentos)
-        .values({
-          clienteId: clienteIdNumerico,
-          tecnicoId: tecnicoIdNumerico,
-          data,
-          hora,
-          status: "agendado",
-        })
-        .returning();
-
-      res.status(201).json(agendamento);
+      res.status(201).json(await buscarUnificado(criadoId));
     } catch (error) {
       next(error);
     }
   },
 );
 
-router.patch(
-  "/:id/cancelar",
-  roles("ceo", "atendente", "tecnico"),
+// Edição do atendimento (cliente, serviço, técnico, data e horário) enquanto
+// ele ainda não foi iniciado. Para um agendamento antigo, sem OS, a edição
+// também cria a OS com o serviço escolhido.
+router.put(
+  "/:id",
+  roles("ceo", "atendente"),
   async (req, res, next) => {
     try {
       const id = Number(req.params.id);
 
       if (!validId(id)) {
-        return res.status(400).json({
-          error: "ID inválido.",
-        });
+        return res.status(400).json({ error: "ID inválido." });
       }
 
-      const rows = await db
+      await db.transaction(async (tx) => {
+        const [agendamento] = await tx
+          .select()
+          .from(agendamentos)
+          .where(eq(agendamentos.id, id));
+
+        if (!agendamento) {
+          throw erroHttp("Agendamento não encontrado.", 404);
+        }
+
+        if (agendamento.status !== "agendado") {
+          throw erroHttp(
+            "Só é possível editar atendimentos agendados.",
+            409,
+          );
+        }
+
+        const [ordem] = await tx
+          .select()
+          .from(ordensServico)
+          .where(eq(ordensServico.agendamentoId, id));
+
+        if (ordem && ordem.status !== "aberta") {
+          throw erroHttp(
+            "Só é possível editar um atendimento que ainda não foi iniciado.",
+            409,
+          );
+        }
+
+        const dados = await validarAtendimento(tx, req.body, {
+          id,
+          atual: {
+            clienteId: agendamento.clienteId,
+            tecnicoId: agendamento.tecnicoId,
+            servicoId: ordem?.servicoId ?? null,
+            data: agendamento.data,
+            hora: agendamento.hora,
+          },
+        });
+
+        await tx
+          .update(agendamentos)
+          .set({
+            clienteId: dados.clienteId,
+            tecnicoId: dados.tecnicoId,
+            data: dados.data,
+            hora: dados.hora,
+          })
+          .where(eq(agendamentos.id, id));
+
+        if (!ordem) {
+          await tx.insert(ordensServico).values({
+            agendamentoId: id,
+            servicoId: dados.servicoId,
+            status: "aberta",
+          });
+        } else if (ordem.servicoId !== dados.servicoId) {
+          await tx
+            .update(ordensServico)
+            .set({ servicoId: dados.servicoId })
+            .where(eq(ordensServico.id, ordem.id));
+        }
+      });
+
+      res.json(await buscarUnificado(id));
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// Cancelar e registrar "atendimento não realizado" (ponto 19) são o mesmo
+// encerramento, mudando só o motivo. Com a unificação, ambos são permitidos
+// enquanto o atendimento não foi iniciado; a OS ainda aberta (sem peças
+// debitadas) é removida junto, para não sobrar uma ordem sem agendamento.
+async function encerrarSemRealizar(req, res, next, { naoRealizado }) {
+  try {
+    const id = Number(req.params.id);
+    const motivo = String(req.body.motivo || "").trim();
+
+    if (!validId(id)) {
+      return res.status(400).json({ error: "ID inválido." });
+    }
+
+    if (naoRealizado && !motivo) {
+      return res.status(400).json({
+        error: "Informe o motivo do atendimento não realizado.",
+      });
+    }
+
+    if (motivo.length > 255) {
+      return res.status(400).json({
+        error: "O motivo deve ter no máximo 255 caracteres.",
+      });
+    }
+
+    await db.transaction(async (tx) => {
+      const [agendamento] = await tx
         .select()
         .from(agendamentos)
         .where(eq(agendamentos.id, id));
 
-      const agendamento = rows[0];
-
       if (!agendamento) {
-        return res.status(404).json({
-          error: "Agendamento não encontrado.",
-        });
+        throw erroHttp("Agendamento não encontrado.", 404);
       }
 
       if (
         req.usuario.perfil === "tecnico" &&
         agendamento.tecnicoId !== req.usuario.id
       ) {
-        return res.status(403).json({
-          error: "Você não pode cancelar este agendamento.",
-        });
+        throw erroHttp("Você não pode alterar este agendamento.", 403);
       }
 
       if (agendamento.status !== "agendado") {
-        return res.status(409).json({
-          error:
-            "Apenas agendamentos em aberto podem ser cancelados.",
-        });
-      }
-
-      const ordemExistente = await db
-        .select()
-        .from(ordensServico)
-        .where(
-          eq(
-            ordensServico.agendamentoId,
-            id,
-          ),
+        throw erroHttp(
+          naoRealizado
+            ? "Apenas agendamentos em aberto podem ser marcados como não realizados."
+            : "Apenas agendamentos em aberto podem ser cancelados.",
+          409,
         );
-
-      if (ordemExistente.length > 0) {
-        return res.status(409).json({
-          error:
-            "Não é possível cancelar um agendamento que já possui ordem de serviço.",
-        });
       }
 
-      const [atualizado] = await db
-        .update(agendamentos)
-        .set({
-          status: "cancelado",
-          canceladoEm: new Date(),
-        })
-        .where(eq(agendamentos.id, id))
-        .returning();
-
-      res.json(atualizado);
-    } catch (error) {
-      next(error);
-    }
-  },
-);
-
-// Ponto 19: registrar que o atendimento não pôde ser realizado (cliente
-// ausente, local fechado, etc.), com motivo obrigatório para histórico.
-router.patch(
-  "/:id/nao-realizado",
-  roles("ceo", "atendente", "tecnico"),
-  async (req, res, next) => {
-    try {
-      const id = Number(req.params.id);
-      const motivo = String(req.body.motivo || "").trim();
-
-      if (!validId(id)) {
-        return res.status(400).json({
-          error: "ID inválido.",
-        });
-      }
-
-      if (!motivo) {
-        return res.status(400).json({
-          error: "Informe o motivo do atendimento não realizado.",
-        });
-      }
-
-      const rows = await db
-        .select()
-        .from(agendamentos)
-        .where(eq(agendamentos.id, id));
-
-      const agendamento = rows[0];
-
-      if (!agendamento) {
-        return res.status(404).json({
-          error: "Agendamento não encontrado.",
-        });
-      }
-
-      if (
-        req.usuario.perfil === "tecnico" &&
-        agendamento.tecnicoId !== req.usuario.id
-      ) {
-        return res.status(403).json({
-          error: "Você não pode alterar este agendamento.",
-        });
-      }
-
-      if (agendamento.status !== "agendado") {
-        return res.status(409).json({
-          error:
-            "Apenas agendamentos em aberto podem ser marcados como não realizados.",
-        });
-      }
-
-      const ordemExistente = await db
+      const [ordem] = await tx
         .select()
         .from(ordensServico)
         .where(eq(ordensServico.agendamentoId, id));
 
-      if (ordemExistente.length > 0) {
-        return res.status(409).json({
-          error:
-            "Não é possível marcar como não realizado um agendamento que já possui ordem de serviço.",
-        });
+      if (ordem && ordem.status !== "aberta") {
+        throw erroHttp(
+          naoRealizado
+            ? "Não é possível marcar como não realizado um atendimento que já foi iniciado."
+            : "Não é possível cancelar um atendimento que já foi iniciado.",
+          409,
+        );
       }
 
-      const [atualizado] = await db
+      if (ordem) {
+        await excluirOrdem(tx, ordem.id);
+      }
+
+      await tx
         .update(agendamentos)
         .set({
           status: "cancelado",
           canceladoEm: new Date(),
-          naoRealizado: 1,
-          motivoNaoRealizado: motivo,
+          ...(naoRealizado
+            ? { naoRealizado: 1, motivoNaoRealizado: motivo }
+            : {}),
         })
-        .where(eq(agendamentos.id, id))
-        .returning();
+        .where(eq(agendamentos.id, id));
+    });
 
-      res.json(atualizado);
+    res.json(await buscarUnificado(id));
+  } catch (error) {
+    next(error);
+  }
+}
+
+router.patch(
+  "/:id/cancelar",
+  roles("ceo", "atendente", "tecnico"),
+  (req, res, next) =>
+    encerrarSemRealizar(req, res, next, { naoRealizado: false }),
+);
+
+router.patch(
+  "/:id/nao-realizado",
+  roles("ceo", "atendente", "tecnico"),
+  (req, res, next) =>
+    encerrarSemRealizar(req, res, next, { naoRealizado: true }),
+);
+
+// Exclusão definitiva do atendimento (somente CEO): remove a OS e o
+// agendamento. Se a OS estava em andamento, as peças voltam ao estoque.
+// Atendimentos concluídos não podem ser excluídos, para preservar o histórico
+// de estoque e de pagamento.
+router.delete(
+  "/:id",
+  roles("ceo"),
+  async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!validId(id)) {
+        return res.status(400).json({ error: "ID inválido." });
+      }
+
+      await db.transaction(async (tx) => {
+        const [agendamento] = await tx
+          .select()
+          .from(agendamentos)
+          .where(eq(agendamentos.id, id));
+
+        if (!agendamento) {
+          throw erroHttp("Agendamento não encontrado.", 404);
+        }
+
+        const [ordem] = await tx
+          .select()
+          .from(ordensServico)
+          .where(eq(ordensServico.agendamentoId, id));
+
+        if (ordem) {
+          await excluirOrdem(tx, ordem.id);
+        }
+
+        await tx.delete(agendamentos).where(eq(agendamentos.id, id));
+      });
+
+      res.status(204).end();
     } catch (error) {
       next(error);
     }

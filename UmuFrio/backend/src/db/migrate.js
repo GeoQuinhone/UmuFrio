@@ -178,6 +178,15 @@ export const migrations = [
    UPDATE movimentacoes_estoque SET extra = COALESCE(extra, 0);
    ALTER TABLE movimentacoes_estoque ALTER COLUMN extra SET NOT NULL;
    ALTER TABLE movimentacoes_estoque ALTER COLUMN extra SET DEFAULT 0`,
+  `ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS valor_cobrado numeric(10,2);
+   ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS forma_pagamento varchar(20);
+   ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS pagamento_confirmado integer DEFAULT 0;
+   UPDATE ordens_servico SET pagamento_confirmado = COALESCE(pagamento_confirmado, 0);
+   ALTER TABLE ordens_servico ALTER COLUMN pagamento_confirmado SET NOT NULL;
+   ALTER TABLE ordens_servico ALTER COLUMN pagamento_confirmado SET DEFAULT 0;
+   ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS pagamento_confirmado_em timestamptz;
+   ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS observacao_pagamento varchar(255);
+   ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS pagamento_usuario_id integer REFERENCES usuarios(id)`,
 ];
 
 export async function runMigrations(client) {
