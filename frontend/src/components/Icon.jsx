@@ -119,6 +119,27 @@ const icons = {
     </>
   ),
   chevronLeft: <path d="m15 18-6-6 6-6" />,
+  check: <path d="M20 6 9 17l-5-5" />,
+  alertTriangle: (
+    <>
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </>
+  ),
+  ban: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m5.6 5.6 12.8 12.8" />
+    </>
+  ),
+  wallet: (
+    <>
+      <rect x="2.5" y="6" width="19" height="13" rx="2" />
+      <path d="M2.5 10h19" />
+      <path d="M16 14.5h2.5" />
+    </>
+  ),
 };
 
 export default function Icon({

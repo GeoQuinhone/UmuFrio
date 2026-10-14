@@ -164,6 +164,29 @@ export const migrations = [
    WHERE id IN (SELECT id FROM duplicados WHERE ordem > 1);
    CREATE UNIQUE INDEX IF NOT EXISTS ux_agendamento_tecnico_horario_ativo
      ON agendamentos (tecnico_id, data, hora) WHERE status = 'agendado'`,
+  `ALTER TABLE servicos ADD COLUMN IF NOT EXISTS ativo integer DEFAULT 1;
+   UPDATE servicos SET ativo = COALESCE(ativo, 1);
+   ALTER TABLE servicos ALTER COLUMN ativo SET NOT NULL;
+   ALTER TABLE servicos ALTER COLUMN ativo SET DEFAULT 1`,
+  `ALTER TABLE agendamentos ADD COLUMN IF NOT EXISTS nao_realizado integer DEFAULT 0;
+   ALTER TABLE agendamentos ADD COLUMN IF NOT EXISTS motivo_nao_realizado varchar(255);
+   UPDATE agendamentos SET nao_realizado = COALESCE(nao_realizado, 0);
+   ALTER TABLE agendamentos ALTER COLUMN nao_realizado SET NOT NULL;
+   ALTER TABLE agendamentos ALTER COLUMN nao_realizado SET DEFAULT 0;
+   ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS iniciada_em timestamptz;
+   ALTER TABLE movimentacoes_estoque ADD COLUMN IF NOT EXISTS extra integer DEFAULT 0;
+   UPDATE movimentacoes_estoque SET extra = COALESCE(extra, 0);
+   ALTER TABLE movimentacoes_estoque ALTER COLUMN extra SET NOT NULL;
+   ALTER TABLE movimentacoes_estoque ALTER COLUMN extra SET DEFAULT 0`,
+  `ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS valor_cobrado numeric(10,2);
+   ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS forma_pagamento varchar(20);
+   ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS pagamento_confirmado integer DEFAULT 0;
+   UPDATE ordens_servico SET pagamento_confirmado = COALESCE(pagamento_confirmado, 0);
+   ALTER TABLE ordens_servico ALTER COLUMN pagamento_confirmado SET NOT NULL;
+   ALTER TABLE ordens_servico ALTER COLUMN pagamento_confirmado SET DEFAULT 0;
+   ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS pagamento_confirmado_em timestamptz;
+   ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS observacao_pagamento varchar(255);
+   ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS pagamento_usuario_id integer REFERENCES usuarios(id)`,
 ];
 
 export async function runMigrations(client) {

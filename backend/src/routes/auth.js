@@ -8,6 +8,7 @@ import {
   requireAuth,
   signToken,
   verifyPassword,
+  cpfValido,
 } from "../security.js";
 
 const router = Router();
@@ -129,7 +130,7 @@ router.post("/bootstrap", async (req, res, next) => {
     if (
       !nome ||
       !email ||
-      cpf.length !== 11 ||
+      !cpfValido(cpf) ||
       !telefone ||
       senha.length < 6
     ) {
@@ -137,7 +138,7 @@ router.post("/bootstrap", async (req, res, next) => {
 
       return res.status(400).json({
         error:
-          "Informe nome, e-mail, CPF, telefone e senha com no mínimo 6 caracteres.",
+          "Informe nome, e-mail, CPF válido, telefone e senha com no mínimo 6 caracteres.",
       });
     }
 
@@ -261,11 +262,10 @@ router.post("/trocar-senha", requireAuth, async (req, res, next) => {
 router.post("/recuperar-senha/validar", async (req, res, next) => {
   try {
     const email = String(req.body.email || "").trim().toLowerCase();
-    const cpf = onlyDigits(req.body.cpf);
 
-    if (!email || cpf.length !== 11) {
+    if (!email) {
       return res.status(400).json({
-        error: "Informe e-mail e CPF.",
+        error: "Informe o e-mail.",
       });
     }
 
@@ -274,9 +274,9 @@ router.post("/recuperar-senha/validar", async (req, res, next) => {
       .from(usuarios)
       .where(eq(usuarios.email, email));
 
-    if (!usuario || onlyDigits(usuario.cpf) !== cpf) {
+    if (!usuario) {
       return res.status(401).json({
-        error: "O CPF informado não corresponde ao cadastrado para este e-mail.",
+        error: "E-mail não encontrado.",
       });
     }
 
@@ -291,12 +291,11 @@ router.post("/recuperar-senha/validar", async (req, res, next) => {
 router.post("/recuperar-senha/redefinir", async (req, res, next) => {
   try {
     const email = String(req.body.email || "").trim().toLowerCase();
-    const cpf = onlyDigits(req.body.cpf);
     const novaSenha = String(req.body.novaSenha || "");
 
-    if (!email || cpf.length !== 11) {
+    if (!email) {
       return res.status(400).json({
-        error: "Informe e-mail e CPF.",
+        error: "Informe o e-mail.",
       });
     }
 
@@ -311,9 +310,9 @@ router.post("/recuperar-senha/redefinir", async (req, res, next) => {
       .from(usuarios)
       .where(eq(usuarios.email, email));
 
-    if (!usuario || onlyDigits(usuario.cpf) !== cpf) {
+    if (!usuario) {
       return res.status(401).json({
-        error: "O CPF informado não corresponde ao cadastrado para este e-mail.",
+        error: "E-mail não encontrado.",
       });
     }
 

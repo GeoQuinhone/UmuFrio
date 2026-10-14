@@ -2,6 +2,13 @@ import React from "react";
 
 import { useAuth } from "../AuthContext.jsx";
 import Icon from "../components/Icon.jsx";
+import {
+  estadoDoAtendimento,
+  formatMoeda,
+  pagamentoConfirmado,
+  podeRegistrarPagamento,
+  valorDoAtendimento,
+} from "../utils/atendimento.js";
 
 function items(resource) {
   return Array.isArray(resource?.items) ? resource.items : [];
@@ -24,21 +31,6 @@ function formatToday() {
     month: "long",
     year: "numeric",
   }).format(new Date());
-}
-
-function statusLabel(value) {
-  if (!value) return "Agendado";
-  return String(value)
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function statusTone(value) {
-  const status = String(value || "").toLowerCase();
-  if (status.includes("cancel") || status.includes("atras")) return "red";
-  if (status.includes("aguard")) return "warn";
-  if (status.includes("andamento") || status.includes("rota")) return "info";
-  return "success";
 }
 
 function count(resource, value) {
@@ -82,7 +74,11 @@ export default function Welcome({
   const userItems = items(usuarios);
   const today = dateKey(new Date());
   const appointmentsToday = appointmentItems
-    .filter((appointment) => dateKey(appointment.data) === today)
+    .filter(
+      (appointment) =>
+        dateKey(appointment.data) === today &&
+        appointment.status !== "cancelado",
+    )
     .sort((a, b) =>
       String(a.hora || "").localeCompare(String(b.hora || "")),
     );
@@ -100,6 +96,33 @@ export default function Welcome({
   const activeClients = clientItems.filter(
     (client) => client.status === "ativo",
   ).length;
+
+  // Faturamento do mês (pontos 11 e 17): soma dos pagamentos confirmados no
+  // mês corrente; e o que ainda está a receber (em andamento ou concluído,
+  // com pagamento pendente).
+  const agora = new Date();
+  const faturamentoMes = appointmentItems
+    .filter((appointment) => {
+      if (!pagamentoConfirmado(appointment)) return false;
+      const confirmadoEm = new Date(appointment.pagamentoConfirmadoEm);
+      return (
+        confirmadoEm.getFullYear() === agora.getFullYear() &&
+        confirmadoEm.getMonth() === agora.getMonth()
+      );
+    })
+    .reduce(
+      (total, appointment) => total + Number(valorDoAtendimento(appointment) || 0),
+      0,
+    );
+  const aReceber = appointmentItems
+    .filter(
+      (appointment) =>
+        podeRegistrarPagamento(appointment) && !pagamentoConfirmado(appointment),
+    )
+    .reduce(
+      (total, appointment) => total + Number(valorDoAtendimento(appointment) || 0),
+      0,
+    );
 
   const weekStart = new Date();
   weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
@@ -133,8 +156,10 @@ export default function Welcome({
       ? [
           {
             label: "Faturamento no mês",
-            value: "—",
-            detail: "Ainda não disponível na API",
+            value: count(agendamentos, formatMoeda(faturamentoMes)),
+            detail: agendamentos.error
+              ? "Não foi possível carregar"
+              : `${formatMoeda(aReceber)} a receber`,
           },
         ]
       : []),
@@ -184,14 +209,10 @@ export default function Welcome({
       key: "agendamentos",
       title: "Agendamentos",
       icon: "calendar",
-      detail: count(agendamentos, `${appointmentsThisWeek} esta semana`),
-      roles: ["ceo", "atendente", "tecnico"],
-    },
-    {
-      key: "ordens",
-      title: "Ordens de serviço",
-      icon: "clipboard",
-      detail: count(ordensServico, `${openOrders} abertas`),
+      detail: count(
+        agendamentos,
+        `${appointmentsThisWeek} esta semana · ${openOrders} em aberto`,
+      ),
       roles: ["ceo", "atendente", "tecnico"],
     },
     {
@@ -288,7 +309,15 @@ export default function Welcome({
               </p>
             ) : appointmentsToday.length ? (
               <div className="dashboard-appointment-list">
-                {appointmentsToday.slice(0, 5).map((appointment) => (
+                {appointmentsToday.slice(0, 5).map((appointment) => {
+                  const estado = estadoDoAtendimento(appointment);
+                  const tonsDoPainel = {
+                    red: "red",
+                    amber: "warn",
+                    blue: "info",
+                    green: "success",
+                  };
+                  return (
                   <div
                     className="dashboard-appointment"
                     key={appointment.id ?? `${appointment.data}-${appointment.hora}`}
@@ -297,7 +326,8 @@ export default function Welcome({
                       <strong>
                         {String(appointment.hora || "").slice(0, 5) || "—"}
                         {" · "}
-                        {appointment.titulo ||
+                        {appointment.servicoNome ||
+                          appointment.titulo ||
                           appointment.descricao ||
                           "Atendimento agendado"}
                       </strong>
@@ -306,12 +336,13 @@ export default function Welcome({
                       </small>
                     </div>
                     <span
-                      className={`dashboard-status dashboard-status-${statusTone(appointment.status)}`}
+                      className={`dashboard-status dashboard-status-${tonsDoPainel[estado.tone] || "success"}`}
                     >
-                      {statusLabel(appointment.status)}
+                      {estado.label}
                     </span>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="dashboard-empty">

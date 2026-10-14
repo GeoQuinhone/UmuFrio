@@ -10,6 +10,8 @@ import {
   ErrorBanner,
 } from "../components/FormControls.jsx";
 import "./clients-users.css";
+import { mascaraCpf, mascaraTelefone, cpfValido } from "../utils/mascaras.js";
+import { useConfirm } from "../components/ConfirmDialog.jsx";
 
 const FORM_VAZIO = {
   nome: "",
@@ -219,6 +221,7 @@ function UserDetails({ usuario, onClose }) {
 }
 
 export default function Usuarios({ crud, onBack }) {
+  const { confirm, confirmElement } = useConfirm();
   const {
     items = [],
     loading,
@@ -278,11 +281,8 @@ export default function Usuarios({ crud, onBack }) {
 
     if (!editingId && !form.cpf.trim()) {
       novosErros.cpf = "Informe o CPF.";
-    } else if (
-      !editingId &&
-      somenteDigitos(form.cpf).length !== 11
-    ) {
-      novosErros.cpf = "CPF deve possuir 11 dígitos.";
+    } else if (!editingId && !cpfValido(form.cpf)) {
+      novosErros.cpf = "CPF inválido.";
     }
 
     if (!form.email.trim()) {
@@ -362,8 +362,9 @@ export default function Usuarios({ crud, onBack }) {
   }
 
   async function remover(usuario) {
-    const confirmado = window.confirm(
+    const confirmado = await confirm(
       `Remover o usuário "${usuario.nome}"?`,
+      { title: "Remover usuário", confirmLabel: "Remover" },
     );
     if (!confirmado) return;
 
@@ -408,6 +409,7 @@ export default function Usuarios({ crud, onBack }) {
   }
 
   return (
+    <>
     <Layout
       title="Usuários e técnicos"
       subtitle="Controle acessos, perfis e disponibilidade da equipe."
@@ -480,9 +482,10 @@ export default function Usuarios({ crud, onBack }) {
                 <TextInput
                   value={form.cpf}
                   onChange={(event) =>
-                    setForm({ ...form, cpf: event.target.value })
+                    setForm({ ...form, cpf: mascaraCpf(event.target.value) })
                   }
                   placeholder="000.000.000-00"
+                  inputMode="numeric"
                   disabled={Boolean(editingId)}
                 />
               </Field>
@@ -501,9 +504,10 @@ export default function Usuarios({ crud, onBack }) {
                 <TextInput
                   value={form.telefone}
                   onChange={(event) =>
-                    setForm({ ...form, telefone: event.target.value })
+                    setForm({ ...form, telefone: mascaraTelefone(event.target.value) })
                   }
                   placeholder="(00) 00000-0000"
+                  inputMode="numeric"
                 />
               </Field>
               <Field label="Perfil de acesso">
@@ -712,5 +716,7 @@ export default function Usuarios({ crud, onBack }) {
         />
       )}
     </Layout>
+    {confirmElement}
+    </>
   );
 }

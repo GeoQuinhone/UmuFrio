@@ -155,6 +155,10 @@ router.post(
   },
 );
 
+// O valor do serviço não é editável aqui de propósito: se o preço muda, o
+// correto é inativar este serviço e cadastrar um novo com o valor atualizado
+// (ponto 15 da orientação), preservando o histórico de ordens de serviço já
+// abertas com o valor antigo. Nome, descrição e peças continuam editáveis.
 router.put(
   "/:id",
   roles("ceo", "atendente"),
@@ -164,14 +168,11 @@ router.put(
       const {
         nome,
         descricao,
-        valor,
       } = req.body;
 
       if (
         !validId(id) ||
-        !nome?.trim() ||
-        !Number.isFinite(Number(valor)) ||
-        Number(valor) < 0
+        !nome?.trim()
       ) {
         return res.status(400).json({
           error: "Dados inválidos.",
@@ -183,7 +184,6 @@ router.put(
         .set({
           nome: nome.trim(),
           descricao: descricao?.trim() || null,
-          valor: String(valor),
         })
         .where(eq(servicos.id, id))
         .returning();
@@ -195,6 +195,47 @@ router.put(
       }
 
       res.json(await incluirPecas(servico));
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.patch(
+  "/:id/status",
+  roles("ceo", "atendente"),
+  async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!validId(id)) {
+        return res.status(400).json({
+          error: "ID inválido.",
+        });
+      }
+
+      const atual = await db
+        .select()
+        .from(servicos)
+        .where(eq(servicos.id, id));
+
+      const servico = atual[0];
+
+      if (!servico) {
+        return res.status(404).json({
+          error: "Serviço não encontrado.",
+        });
+      }
+
+      const [atualizado] = await db
+        .update(servicos)
+        .set({
+          ativo: servico.ativo ? 0 : 1,
+        })
+        .where(eq(servicos.id, id))
+        .returning();
+
+      res.json(await incluirPecas(atualizado));
     } catch (error) {
       next(error);
     }

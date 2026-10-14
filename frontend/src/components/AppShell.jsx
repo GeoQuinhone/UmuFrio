@@ -1,52 +1,9 @@
 import React, { useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
 
 import { useAuth } from "../AuthContext.jsx";
 import Icon from "./Icon.jsx";
-
-const navigation = [
-  {
-    key: "welcome",
-    label: "Início",
-    icon: "dashboard",
-    roles: ["ceo", "atendente", "tecnico", "estoquista"],
-  },
-  {
-    key: "clientes",
-    label: "Clientes",
-    icon: "users",
-    roles: ["ceo", "atendente"],
-  },
-  {
-    key: "usuarios",
-    label: "Usuários",
-    icon: "userSettings",
-    roles: ["ceo"],
-  },
-  {
-    key: "servicos",
-    label: "Serviços",
-    icon: "wrench",
-    roles: ["ceo", "atendente"],
-  },
-  {
-    key: "estoque",
-    label: "Estoque",
-    icon: "package",
-    roles: ["ceo", "estoquista"],
-  },
-  {
-    key: "agendamentos",
-    label: "Agendamentos",
-    icon: "calendar",
-    roles: ["ceo", "atendente", "tecnico"],
-  },
-  {
-    key: "ordens",
-    label: "Ordens de Serviço",
-    icon: "clipboard",
-    roles: ["ceo", "atendente", "tecnico"],
-  },
-];
+import { ROTAS } from "../routes.js";
 
 function initials(name = "") {
   return name
@@ -58,23 +15,19 @@ function initials(name = "") {
     .toUpperCase();
 }
 
-export default function AppShell({
-  activePage,
-  onNavigate,
-  children,
-}) {
+export default function AppShell({ children }) {
   const { user, logout } = useAuth();
+  const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const activeItem = navigation.find((item) => item.key === activePage);
-  const allowedNavigation = navigation.filter((item) =>
+  const activeItem = ROTAS.find((item) =>
+    item.path === "/"
+      ? pathname === "/"
+      : pathname === item.path || pathname.startsWith(`${item.path}/`),
+  );
+  const allowedNavigation = ROTAS.filter((item) =>
     item.roles.includes(user?.perfil),
   );
-
-  function navigate(page) {
-    onNavigate(page);
-    setMenuOpen(false);
-  }
 
   return (
     <div className={`app-shell${menuOpen ? " app-shell-menu-open" : ""}`}>
@@ -88,10 +41,10 @@ export default function AppShell({
       )}
 
       <aside className="app-sidebar" aria-label="Navegação principal">
-        <button
-          type="button"
+        <NavLink
+          to="/"
           className="app-brand"
-          onClick={() => navigate("welcome")}
+          onClick={() => setMenuOpen(false)}
           aria-label="UmuFrio, ir para a visão geral"
         >
           <span className="app-brand-mark">
@@ -101,27 +54,29 @@ export default function AppShell({
             <strong>UmuFrio</strong>
             <small>GESTÃO<br />TÉCNICA</small>
           </span>
-        </button>
+        </NavLink>
 
         <nav className="app-nav">
           {allowedNavigation.map((item) => (
-            <button
+            <NavLink
               key={item.key}
-              type="button"
-              className={`app-nav-item${activePage === item.key ? " is-active" : ""}`}
-              aria-current={activePage === item.key ? "page" : undefined}
-              onClick={() => navigate(item.key)}
+              to={item.path}
+              end={item.path === "/"}
+              className={({ isActive }) =>
+                `app-nav-item${isActive ? " is-active" : ""}`
+              }
+              onClick={() => setMenuOpen(false)}
             >
               <Icon name={item.icon} size={18} />
               <span>{item.label}</span>
-            </button>
+            </NavLink>
           ))}
         </nav>
 
         <div className="app-sidebar-footer">
           <span>
             <strong>UmuFrio Gestão</strong>
-            <small>Ambiente seguro</small>
+            <small>Desenvolvido pela TrinityX </small>
           </span>
         </div>
       </aside>

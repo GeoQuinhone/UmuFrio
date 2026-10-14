@@ -51,3 +51,17 @@ export async function requireAuth(req, res, next) {
 export const roles = (...allowed) => (req, res, next) => allowed.includes(req.usuario?.perfil) ? next() : res.status(403).json({ error: "Você não possui permissão para esta operação." });
 export const onlyDigits = (value) => String(value || "").replace(/\D/g, "");
 export const validId = (value) => Number.isInteger(Number(value)) && Number(value) > 0;
+export function cpfValido(value) {
+  const cpf = onlyDigits(value);
+  if (cpf.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(cpf)) return false;
+  const digito = (base) => {
+    let soma = 0;
+    for (let i = 0; i < base.length; i += 1) soma += Number(base[i]) * (base.length + 1 - i);
+    const resto = (soma * 10) % 11;
+    return resto === 10 ? 0 : resto;
+  };
+  const d1 = digito(cpf.slice(0, 9));
+  const d2 = digito(cpf.slice(0, 9) + d1);
+  return cpf.slice(9, 11) === `${d1}${d2}`;
+}

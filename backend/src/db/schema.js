@@ -56,6 +56,8 @@ export const agendamentos = pgTable("agendamentos", {
   hora: time("hora").notNull(),
   status: statusAgendamentoEnum("status").notNull().default("agendado"),
   canceladoEm: timestamp("cancelado_em"),
+  naoRealizado: integer("nao_realizado").notNull().default(0),
+  motivoNaoRealizado: varchar("motivo_nao_realizado", { length: 255 }),
 });
 
 export const servicos = pgTable("servicos", {
@@ -63,6 +65,7 @@ export const servicos = pgTable("servicos", {
   nome: varchar("nome", { length: 100 }).notNull(),
   descricao: varchar("descricao", { length: 255 }),
   valor: numeric("valor", { precision: 10, scale: 2 }).notNull(),
+  ativo: integer("ativo").notNull().default(1),
 });
 
 export const produtos = pgTable("produtos", {
@@ -86,7 +89,16 @@ export const ordensServico = pgTable("ordens_servico", {
   servicoId: integer("servico_id").notNull().references(() => servicos.id),
   status: statusOsEnum("status").notNull().default("aberta"),
   abertaEm: timestamp("aberta_em").notNull().defaultNow(),
+  iniciadaEm: timestamp("iniciada_em"),
   concluidaEm: timestamp("concluida_em"),
+  // Pagamento (pontos 11 e 17): valor realmente cobrado (pode diferir do valor
+  // de tabela do serviço), forma, confirmação e observação do motivo.
+  valorCobrado: numeric("valor_cobrado", { precision: 10, scale: 2 }),
+  formaPagamento: varchar("forma_pagamento", { length: 20 }),
+  pagamentoConfirmado: integer("pagamento_confirmado").notNull().default(0),
+  pagamentoConfirmadoEm: timestamp("pagamento_confirmado_em"),
+  observacaoPagamento: varchar("observacao_pagamento", { length: 255 }),
+  pagamentoUsuarioId: integer("pagamento_usuario_id").references(() => usuarios.id),
 });
 
 export const movimentacoesEstoque = pgTable("movimentacoes_estoque", {
@@ -97,4 +109,5 @@ export const movimentacoesEstoque = pgTable("movimentacoes_estoque", {
   tipo: tipoMovimentacaoEnum("tipo").notNull(),
   quantidade: integer("quantidade").notNull(),
   data: timestamp("data").notNull().defaultNow(),
+  extra: integer("extra").notNull().default(0),
 });

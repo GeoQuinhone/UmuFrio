@@ -7,6 +7,7 @@ import {
   onlyDigits,
   roles,
   validId,
+  cpfValido,
 } from "../security.js";
 
 const router = Router();
@@ -94,9 +95,9 @@ router.post(
         });
       }
 
-      if (onlyDigits(cpf).length !== 11) {
+      if (!cpfValido(cpf)) {
         return res.status(400).json({
-          error: "CPF deve possuir 11 dígitos.",
+          error: "CPF inválido.",
         });
       }
 

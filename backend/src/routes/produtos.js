@@ -41,6 +41,31 @@ router.get(
   },
 );
 
+// O técnico não tem acesso à lista completa de estoque (preço de custo,
+// estoque mínimo), mas precisa poder escolher uma peça para registrar um
+// consumo extra durante o atendimento (ponto 12) — por isso uma versão
+// reduzida, só com o que é necessário para esse formulário.
+router.get(
+  "/para-tecnico",
+  roles("ceo", "atendente", "estoquista", "tecnico"),
+  async (_req, res, next) => {
+    try {
+      const rows = await db
+        .select({
+          id: produtos.id,
+          nome: produtos.nome,
+          saldo: produtos.saldo,
+        })
+        .from(produtos)
+        .orderBy(produtos.nome);
+
+      res.json(rows);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 router.get(
   "/alertas",
   roles("ceo", "estoquista"),

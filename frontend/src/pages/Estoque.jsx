@@ -9,13 +9,21 @@ import {
   ErrorBanner,
 } from "../components/FormControls.jsx";
 import "./catalog-stock.css";
+import { useConfirm } from "../components/ConfirmDialog.jsx";
+import { mascaraMoeda, moedaParaNumero } from "../utils/mascaras.js";
 
 const FORM_VAZIO = {
   nome: "",
-  valorUnitario: "0.00",
+  valorUnitario: "",
   saldo: "0",
   quantidadeMinima: "0",
 };
+
+function valorParaMascara(value) {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount)) return "";
+  return mascaraMoeda(String(Math.round(amount * 100)));
+}
 
 const MOVIMENTACAO_VAZIA = {
   produtoId: "",
@@ -132,6 +140,7 @@ function useDialogFocus(isOpen, onClose) {
 }
 
 export default function Estoque({ crud, onBack }) {
+  const { confirm, confirmElement } = useConfirm();
   const {
     items,
     loading,
@@ -216,9 +225,7 @@ export default function Estoque({ crud, onBack }) {
     setEditingId(produto.id);
     setForm({
       nome: produto.nome || "",
-      valorUnitario: String(
-        Number(produto.valorUnitario || 0).toFixed(2),
-      ),
+      valorUnitario: valorParaMascara(produto.valorUnitario),
       saldo: String(produto.saldo || 0),
       quantidadeMinima: String(
         produto.quantidadeMinima ??
@@ -240,7 +247,7 @@ export default function Estoque({ crud, onBack }) {
   async function salvarProduto(event) {
     event.preventDefault();
 
-    const valorUnitario = Number(form.valorUnitario);
+    const valorUnitario = moedaParaNumero(form.valorUnitario);
     const saldo = Number(form.saldo);
     const quantidadeMinima = Number(form.quantidadeMinima);
 
@@ -249,7 +256,7 @@ export default function Estoque({ crud, onBack }) {
       return;
     }
 
-    if (!Number.isFinite(valorUnitario) || valorUnitario < 0) {
+    if (!form.valorUnitario || !Number.isFinite(valorUnitario) || valorUnitario < 0) {
       setFormError("Informe um valor unitário válido.");
       return;
     }
@@ -360,8 +367,9 @@ export default function Estoque({ crud, onBack }) {
   }
 
   async function removerProduto(produto) {
-    const confirmado = window.confirm(
+    const confirmado = await confirm(
       `Remover o produto "${produto.nome}" do catálogo?`,
+      { title: "Remover produto", confirmLabel: "Remover" },
     );
 
     if (!confirmado) return;
@@ -384,6 +392,7 @@ export default function Estoque({ crud, onBack }) {
   }
 
   return (
+    <>
     <Layout
       title="Estoque"
       subtitle="Acompanhe peças e materiais antes que faltem no atendimento."
@@ -544,14 +553,13 @@ export default function Estoque({ crud, onBack }) {
               </Field>
               <Field label="Valor unitário (R$)">
                 <TextInput
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  inputMode="numeric"
+                  placeholder="0,00"
                   value={form.valorUnitario}
                   onChange={(event) =>
                     setForm({
                       ...form,
-                      valorUnitario: event.target.value,
+                      valorUnitario: mascaraMoeda(event.target.value),
                     })
                   }
                 />
@@ -855,5 +863,7 @@ export default function Estoque({ crud, onBack }) {
         </div>
       )}
     </Layout>
+    {confirmElement}
+    </>
   );
 }

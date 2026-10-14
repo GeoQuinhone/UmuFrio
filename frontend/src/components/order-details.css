@@ -1,0 +1,240 @@
+/* Timeline visual da Ordem de Serviço (ponto 18) e peças extras (ponto 12). */
+
+.os-timeline {
+  list-style: none;
+  margin: 20px 0;
+  padding: 0;
+}
+
+.os-timeline-step {
+  display: flex;
+  gap: 12px;
+  position: relative;
+  padding-bottom: 22px;
+}
+
+.os-timeline-step:last-child {
+  padding-bottom: 0;
+}
+
+.os-timeline-step::before {
+  content: "";
+  position: absolute;
+  top: 22px;
+  left: 10px;
+  width: 2px;
+  bottom: 0;
+  background: var(--border);
+}
+
+.os-timeline-step:last-child::before {
+  display: none;
+}
+
+.os-timeline-dot {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: #fff;
+  color: #fff;
+  z-index: 1;
+}
+
+.os-timeline-step.is-done .os-timeline-dot {
+  background: var(--green, #1e8a5a);
+  border-color: var(--green, #1e8a5a);
+}
+
+.os-timeline-step.is-current .os-timeline-dot {
+  border-color: var(--teal);
+  background: var(--ice);
+}
+
+.os-timeline-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.os-timeline-content strong {
+  color: var(--navy);
+  font-size: 0.92rem;
+}
+
+.os-timeline-content small {
+  color: var(--grey);
+  font-size: 0.8rem;
+}
+
+.os-timeline-step.is-pending .os-timeline-content strong {
+  color: var(--grey);
+}
+
+.os-extra-parts {
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 16px;
+}
+
+.os-extra-parts h3 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  color: var(--navy);
+}
+
+.os-extra-parts-empty {
+  color: var(--grey);
+  font-size: 0.85rem;
+  margin: 0 0 12px;
+}
+
+.os-extra-parts-list {
+  list-style: disc;
+  margin: 0 0 14px;
+  padding-left: 20px;
+  font-size: 0.88rem;
+  color: var(--dark);
+}
+
+.os-extra-parts-form {
+  display: grid;
+  grid-template-columns: 2fr 1fr auto;
+  gap: 10px;
+  align-items: end;
+}
+
+@media (max-width: 560px) {
+  .os-extra-parts-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Pagamento do atendimento (pontos 11 e 17). */
+
+.payment-reference {
+  margin: 0 0 14px;
+  color: var(--grey);
+  font-size: 0.88rem;
+}
+
+.payment-reference strong {
+  color: var(--navy);
+}
+
+.payment-notice {
+  margin: 14px 0;
+  padding: 11px 13px;
+  border: 1px solid #e8d9b5;
+  border-radius: 8px;
+  background: #fbf5e6;
+  color: #7a5a14;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.payment-hint {
+  margin: 14px 0 0;
+  color: var(--grey);
+  font-size: 0.84rem;
+}
+
+.payment-observation {
+  min-height: 74px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.payment-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 14px 0 4px;
+  padding: 12px 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfdfd;
+  cursor: pointer;
+}
+
+.payment-confirm input {
+  margin-top: 3px;
+}
+
+.payment-confirm span {
+  display: grid;
+  gap: 2px;
+}
+
+.payment-confirm small {
+  color: var(--grey);
+  font-size: 0.8rem;
+}
+
+.payment-summary {
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 16px;
+}
+
+.payment-summary-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.payment-summary-heading h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--navy);
+}
+
+.payment-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.payment-summary-grid > div {
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid #e8eff0;
+  border-radius: 8px;
+  background: #fbfdfd;
+}
+
+.payment-summary-grid .payment-summary-wide {
+  grid-column: 1 / -1;
+}
+
+.payment-summary-grid dt {
+  color: var(--grey);
+  font-size: 0.74rem;
+}
+
+.payment-summary-grid dd {
+  margin: 2px 0 0;
+  color: var(--navy);
+  font-size: 0.9rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.payment-summary .btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+@media (max-width: 560px) {
+  .payment-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

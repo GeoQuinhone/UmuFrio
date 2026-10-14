@@ -9,6 +9,8 @@ import {
   ErrorBanner,
 } from "../components/FormControls.jsx";
 import { apiRequest } from "../api.js";
+import { useConfirm } from "../components/ConfirmDialog.jsx";
+import { mascaraMoeda, moedaParaNumero } from "../utils/mascaras.js";
 import "./catalog-stock.css";
 
 const moeda = new Intl.NumberFormat("pt-BR", {
@@ -19,6 +21,12 @@ const moeda = new Intl.NumberFormat("pt-BR", {
 function formatarValor(value) {
   const amount = Number(value);
   return Number.isFinite(amount) ? moeda.format(amount) : "—";
+}
+
+function valorParaMascara(value) {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount)) return "";
+  return mascaraMoeda(String(Math.round(amount * 100)));
 }
 
 function codigoServico(servico) {
@@ -122,7 +130,8 @@ function useDialogFocus(isOpen, onClose) {
 }
 
 export default function Servicos({ crud, estoque, onBack }) {
-  const { items, loading, error, add, remove, reload } = crud;
+  const { items, loading, error, add, remove, action, reload } = crud;
+  const { confirm, confirmElement } = useConfirm();
   const servicos = Array.isArray(items) ? items : [];
   const produtos = Array.isArray(estoque?.items) ? estoque.items : [];
   const [editing, setEditing] = useState(null);
@@ -181,7 +190,7 @@ export default function Servicos({ crud, estoque, onBack }) {
     setForm({
       nome: item.nome || "",
       descricao: item.descricao || "",
-      valor: Number(item.valor || 0).toFixed(2),
+      valor: valorParaMascara(item.valor),
       pecas: (item.pecas || []).map((piece) => ({
         produtoId: String(piece.produtoId),
         quantidadeNecessaria: String(piece.quantidadeNecessaria),
@@ -199,14 +208,14 @@ export default function Servicos({ crud, estoque, onBack }) {
   async function handleSubmit(event) {
     event.preventDefault();
 
-    const valor = Number(form.valor);
+    const valor = moedaParaNumero(form.valor);
 
     if (!form.nome.trim()) {
       setFormError("Informe o nome do serviço.");
       return;
     }
 
-    if (!form.valor || !Number.isFinite(valor) || valor < 0) {
+    if (editing === "new" && (!form.valor || !Number.isFinite(valor) || valor <= 0)) {
       setFormError("Informe um valor válido para o serviço.");
       return;
     }
@@ -230,6 +239,7 @@ export default function Servicos({ crud, estoque, onBack }) {
     try {
       const payload = {
         ...form,
+        valor: String(valor),
         pecas: form.pecas.filter(
           (piece) =>
             piece.produtoId &&
@@ -245,7 +255,6 @@ export default function Servicos({ crud, estoque, onBack }) {
           body: JSON.stringify({
             nome: payload.nome.trim(),
             descricao: payload.descricao,
-            valor: payload.valor,
           }),
         });
         await apiRequest(`/servicos/${editing}/pecas`, {
@@ -264,12 +273,35 @@ export default function Servicos({ crud, estoque, onBack }) {
     }
   }
 
+  async function alternarStatus(service) {
+    const status = statusServico(service);
+    const ativando = status.label !== "Ativo";
+    const ok = await confirm(
+      ativando
+        ? `Reativar o serviço "${service.nome}"?`
+        : `Inativar o serviço "${service.nome}"? Ele deixará de aparecer para novos agendamentos. Se o motivo é alterar o valor, cadastre um novo serviço com o preço atualizado.`,
+      {
+        title: ativando ? "Ativar serviço" : "Inativar serviço",
+        confirmLabel: ativando ? "Ativar" : "Inativar",
+        danger: !ativando,
+      },
+    );
+    if (!ok) return;
+
+    try {
+      await action(service.id, "/status");
+      setBanner("");
+    } catch (actionError) {
+      setBanner(actionError.message);
+    }
+  }
+
   async function handleDelete(service) {
-    if (
-      !window.confirm(
-        `Tem certeza que deseja excluir o serviço "${service.nome}"?`,
-      )
-    ) {
+    const ok = await confirm(
+      `Tem certeza que deseja excluir o serviço "${service.nome}"?`,
+      { title: "Excluir serviço", confirmLabel: "Excluir" },
+    );
+    if (!ok) {
       return;
     }
 
@@ -323,6 +355,7 @@ export default function Servicos({ crud, estoque, onBack }) {
   }
 
   return (
+    <>
     <Layout
       title="Catálogo de serviços"
       subtitle="Preços e descrições que sua equipe usa no orçamento."
@@ -383,15 +416,22 @@ export default function Servicos({ crud, estoque, onBack }) {
                   autoFocus
                 />
               </Field>
-              <Field label="Valor base (R$)">
+              <Field
+                label="Valor base (R$)"
+                hint={
+                  editing !== "new"
+                    ? "O valor não pode ser alterado aqui. Para mudar o preço, inative este serviço e cadastre um novo."
+                    : undefined
+                }
+              >
                 <input
                   className="input"
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  inputMode="numeric"
+                  placeholder="0,00"
                   value={form.valor}
+                  disabled={editing !== "new"}
                   onChange={(event) =>
-                    setForm({ ...form, valor: event.target.value })
+                    setForm({ ...form, valor: mascaraMoeda(event.target.value) })
                   }
                 />
               </Field>
@@ -638,6 +678,15 @@ export default function Servicos({ crud, estoque, onBack }) {
                           </button>
                           <button
                             type="button"
+                            className="catalog-icon-button"
+                            aria-label={`${status.label === "Ativo" ? "Inativar" : "Ativar"} ${service.nome}`}
+                            title={status.label === "Ativo" ? "Inativar" : "Ativar"}
+                            onClick={() => alternarStatus(service)}
+                          >
+                            <Icon name={status.label === "Ativo" ? "alertTriangle" : "check"} size={16} />
+                          </button>
+                          <button
+                            type="button"
                             className="catalog-icon-button is-danger"
                             aria-label={`Excluir ${service.nome}`}
                             title="Excluir"
@@ -731,5 +780,7 @@ export default function Servicos({ crud, estoque, onBack }) {
         </div>
       )}
     </Layout>
+    {confirmElement}
+    </>
   );
 }

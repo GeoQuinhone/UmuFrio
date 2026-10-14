@@ -1,15 +1,21 @@
-import React, { useState } from "react";
+import React from "react";
+import {
+  Navigate,
+  Route,
+  Routes,
+  useNavigate,
+} from "react-router-dom";
 import AppShell from "./components/AppShell.jsx";
 import Welcome from "./pages/Welcome.jsx";
 import Clientes from "./pages/Clientes.jsx";
 import Agendamentos from "./pages/Agendamentos.jsx";
-import OrdensServico from "./pages/OrdensServico.jsx";
 import Estoque from "./pages/Estoque.jsx";
 import Usuarios from "./pages/Usuarios.jsx";
 import Servicos from "./pages/Servicos.jsx";
 import Login from "./pages/Login.jsx";
 import PrimeiroAcesso from "./pages/PrimeiroAcesso.jsx";
 import { useApiCrud } from "./hooks/useApiCrud.js";
+import { caminhoDaChave } from "./routes.js";
 import {
   AuthProvider,
   useAuth,
@@ -17,8 +23,7 @@ import {
 
 function AppContent() {
   const { user, loading } = useAuth();
-  const [page, setPage] = useState("welcome");
-  const [createAppointmentRequestId, setCreateAppointmentRequestId] = useState(0);
+  const navigate = useNavigate();
 
   const podeClientes =
     user?.perfil === "ceo" ||
@@ -74,6 +79,13 @@ function AppContent() {
     enabled: podeClientes,
   });
 
+  // Versão reduzida do estoque (sem preço de custo/estoque mínimo), usada
+  // pelo técnico na tela de Agendamentos para descontar peças extras
+  // (ponto 12) sem precisar do acesso completo à tela de Estoque.
+  const produtosParaOS = useApiCrud("/produtos/para-tecnico", {
+    enabled: podeAgenda,
+  });
+
   if (loading) {
     return (
       <div className="layout">
@@ -90,111 +102,123 @@ function AppContent() {
     return <PrimeiroAcesso />;
   }
 
-  function voltarParaInicio() {
-    navigateTo("welcome");
+  // O painel inicial pede navegação pela chave do módulo; aqui ela vira URL.
+  function navigateTo(key) {
+    navigate(caminhoDaChave(key));
   }
 
-  function navigateTo(nextPage) {
-    setCreateAppointmentRequestId(0);
-    setPage(nextPage);
+  function voltarParaInicio() {
+    navigate("/");
   }
 
   function solicitarNovoAgendamento() {
     if (!["ceo", "atendente"].includes(user?.perfil)) return;
-    setCreateAppointmentRequestId((requestId) => requestId + 1);
-    setPage("agendamentos");
+    navigate("/agendamentos/novo");
   }
 
-  let pageContent;
+  // Estoque mudou (peças debitadas ao iniciar o atendimento ou peça extra):
+  // atualiza a lista completa e a reduzida usada pelo técnico.
+  function recarregarEstoque() {
+    estoque.reload?.();
+    produtosParaOS.reload?.();
+  }
 
-  switch (page) {
-    case "clientes":
-      pageContent = (
-        <Clientes
-          crud={clientes}
-          agendamentos={agendamentos}
-          onBack={voltarParaInicio}
-        />
-      );
-      break;
-
-    case "agendamentos":
-      pageContent = (
-        <Agendamentos
-          crud={agendamentos}
-          clientes={clientes}
-          usuarios={usuarios}
-          tecnicos={tecnicos}
-          createAppointmentRequestId={createAppointmentRequestId}
-          onCreateAppointmentRequestHandled={() => setCreateAppointmentRequestId(0)}
-          onBack={voltarParaInicio}
-        />
-      );
-      break;
-
-    case "ordens":
-      pageContent = (
-        <OrdensServico
-          crud={ordensServico}
-          agendamentos={agendamentos}
-          clientes={clientes}
-          usuarios={usuarios}
-          tecnicos={tecnicos}
-          servicos={servicos}
-          onBack={voltarParaInicio}
-        />
-      );
-      break;
-
-    case "estoque":
-      pageContent = (
-        <Estoque
-          crud={estoque}
-          onBack={voltarParaInicio}
-        />
-      );
-      break;
-
-    case "usuarios":
-      pageContent = (
-        <Usuarios
-          crud={usuarios}
-          onBack={voltarParaInicio}
-        />
-      );
-      break;
-
-    case "servicos":
-      pageContent = (
-        <Servicos
-          crud={servicos}
-          estoque={estoque}
-          onBack={voltarParaInicio}
-        />
-      );
-      break;
-
-    default:
-      pageContent = (
-        <Welcome
-          onNavigate={navigateTo}
-          onCreateAppointment={solicitarNovoAgendamento}
-          clientes={clientes}
-          agendamentos={agendamentos}
-          ordensServico={ordensServico}
-          estoque={estoque}
-          servicos={servicos}
-          usuarios={usuarios}
-        />
-      );
+  // Acesso por URL só para quem tem o perfil do módulo; os demais voltam ao
+  // início (o backend continua validando as permissões).
+  function protegida(perfis, elemento) {
+    return perfis.includes(user?.perfil) ? elemento : <Navigate to="/" replace />;
   }
 
   return (
-    <AppShell
-      activePage={page}
-      onNavigate={navigateTo}
-    >
-      {pageContent}
+    <AppShell>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <Welcome
+              onNavigate={navigateTo}
+              onCreateAppointment={solicitarNovoAgendamento}
+              clientes={clientes}
+              agendamentos={agendamentos}
+              ordensServico={ordensServico}
+              estoque={estoque}
+              servicos={servicos}
+              usuarios={usuarios}
+            />
+          }
+        />
+
+        <Route
+          path="/clientes"
+          element={protegida(
+            ["ceo", "atendente"],
+            <Clientes
+              crud={clientes}
+              agendamentos={agendamentos}
+              onBack={voltarParaInicio}
+            />,
+          )}
+        />
+
+        <Route
+          path="/agendamentos/*"
+          element={protegida(
+            ["ceo", "atendente", "tecnico"],
+            <Agendamentos
+              crud={agendamentos}
+              clientes={clientes}
+              tecnicos={tecnicos}
+              servicos={servicos}
+              ordensServico={ordensServico}
+              estoque={produtosParaOS}
+              onEstoqueAlterado={recarregarEstoque}
+              onBack={voltarParaInicio}
+            />,
+          )}
+        />
+
+        {/* Ponto 10: a ordem de serviço agora faz parte do agendamento. */}
+        <Route
+          path="/ordens-servico/*"
+          element={<Navigate to="/agendamentos" replace />}
+        />
+
+        <Route
+          path="/estoque"
+          element={protegida(
+            ["ceo", "estoquista"],
+            <Estoque
+              crud={estoque}
+              onBack={voltarParaInicio}
+            />,
+          )}
+        />
+
+        <Route
+          path="/usuarios"
+          element={protegida(
+            ["ceo"],
+            <Usuarios
+              crud={usuarios}
+              onBack={voltarParaInicio}
+            />,
+          )}
+        />
+
+        <Route
+          path="/servicos"
+          element={protegida(
+            ["ceo", "atendente"],
+            <Servicos
+              crud={servicos}
+              estoque={estoque}
+              onBack={voltarParaInicio}
+            />,
+          )}
+        />
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </AppShell>
   );
 }

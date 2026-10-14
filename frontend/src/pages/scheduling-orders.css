@@ -466,3 +466,73 @@
     justify-self: start;
   }
 }
+
+.schedule-client-field {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.schedule-client-field select {
+  flex: 1;
+}
+
+.schedule-client-new {
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+}
+
+.schedule-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.schedule-tab {
+  border: 1px solid var(--border);
+  background: transparent;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-weight: 600;
+  color: var(--grey);
+  cursor: pointer;
+}
+
+.schedule-tab.is-active {
+  background: var(--deepblue);
+  border-color: var(--deepblue);
+  color: #fff;
+}
+
+/* Tela unificada de agendamentos/ordens (ponto 10): mais colunas e mais
+   ações por linha, então a coluna de ações não pode ser estreita. */
+.schedule-appointments-table {
+  min-width: 1080px;
+}
+
+.schedule-appointments-table .schedule-row-actions {
+  width: 1%;
+  min-width: 54px;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.schedule-appointments-table .schedule-row-actions .schedule-icon-action + .schedule-icon-action {
+  margin-left: 2px;
+}
+
+
+/* O campo de cliente (seletor + botão "Novo cliente") ocupa duas colunas para
+   o botão não sobrepor o campo seguinte. */
+.schedule-form .form-grid > .field:first-child {
+  grid-column: span 2;
+}
+
+@media (max-width: 760px) {
+  .schedule-form .form-grid > .field:first-child {
+    grid-column: auto;
+  }
+}
