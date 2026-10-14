@@ -18,8 +18,27 @@ import {
   roles,
   validId,
 } from "../security.js";
+import { erroHttp, excluirOrdem } from "../ordemHelpers.js";
 
 const router = Router();
+
+// Formas de pagamento aceitas (ponto 11). Ficam em texto livre no banco, mas
+// só estes valores são aceitos pela API.
+export const FORMAS_PAGAMENTO = [
+  "dinheiro",
+  "pix",
+  "cartao_debito",
+  "cartao_credito",
+];
+
+// Se "true", só é possível concluir o atendimento com o pagamento confirmado.
+// Por padrão não é exigido: o cliente pode pagar depois, e a tela apenas avisa.
+const EXIGIR_PAGAMENTO_PARA_CONCLUIR =
+  process.env.EXIGIR_PAGAMENTO_PARA_CONCLUIR === "true";
+
+function emCentavos(valor) {
+  return Math.round(Number(valor) * 100);
+}
 
 // Junta a OS com o agendamento, o cliente e o serviço para já devolver os
 // nomes prontos — assim o técnico (que não tem acesso às listas completas
@@ -34,6 +53,11 @@ function selecaoComNomes() {
       abertaEm: ordensServico.abertaEm,
       iniciadaEm: ordensServico.iniciadaEm,
       concluidaEm: ordensServico.concluidaEm,
+      valorCobrado: ordensServico.valorCobrado,
+      formaPagamento: ordensServico.formaPagamento,
+      pagamentoConfirmado: ordensServico.pagamentoConfirmado,
+      pagamentoConfirmadoEm: ordensServico.pagamentoConfirmadoEm,
+      observacaoPagamento: ordensServico.observacaoPagamento,
       servicoNome: servicos.nome,
       servicoValor: servicos.valor,
       clienteId: agendamentos.clienteId,
@@ -405,69 +429,7 @@ router.delete(
       }
 
       await db.transaction(async (tx) => {
-        const ordensEncontradas = await tx
-          .select()
-          .from(ordensServico)
-          .where(eq(ordensServico.id, id));
-
-        const ordem = ordensEncontradas[0];
-
-        if (!ordem) {
-          const error = new Error(
-            "Ordem de serviço não encontrada.",
-          );
-          error.status = 404;
-          throw error;
-        }
-
-        if (ordem.status === "concluida") {
-          const error = new Error(
-            "Não é possível excluir uma ordem de serviço já concluída, pois o histórico de movimentações de estoque precisa ser preservado.",
-          );
-          error.status = 409;
-          throw error;
-        }
-
-        if (ordem.status === "andamento") {
-          const movimentacoes = await tx
-            .select()
-            .from(movimentacoesEstoque)
-            .where(
-              eq(
-                movimentacoesEstoque.ordemServicoId,
-                id,
-              ),
-            );
-
-          for (const movimentacao of movimentacoes) {
-            if (movimentacao.tipo === "saida") {
-              await tx
-                .update(produtos)
-                .set({
-                  saldo: sql`${produtos.saldo} + ${movimentacao.quantidade}`,
-                })
-                .where(
-                  eq(
-                    produtos.id,
-                    movimentacao.produtoId,
-                  ),
-                );
-            }
-          }
-
-          await tx
-            .delete(movimentacoesEstoque)
-            .where(
-              eq(
-                movimentacoesEstoque.ordemServicoId,
-                id,
-              ),
-            );
-        }
-
-        await tx
-          .delete(ordensServico)
-          .where(eq(ordensServico.id, id));
+        await excluirOrdem(tx, id);
       });
 
       res.status(204).end();
@@ -544,6 +506,33 @@ router.patch(
             );
             error.status = 409;
             throw error;
+          }
+
+          if (
+            proximoStatus === "concluida" &&
+            EXIGIR_PAGAMENTO_PARA_CONCLUIR &&
+            !ordem.pagamentoConfirmado
+          ) {
+            throw erroHttp(
+              "Confirme o pagamento antes de concluir o atendimento.",
+              409,
+            );
+          }
+
+          // O valor cobrado nasce igual ao valor do serviço no momento em que
+          // o atendimento começa; depois pode ser ajustado em /pagamento.
+          let valorCobradoInicial = ordem.valorCobrado;
+
+          if (
+            proximoStatus === "andamento" &&
+            valorCobradoInicial === null
+          ) {
+            const [servicoDaOrdem] = await tx
+              .select({ valor: servicos.valor })
+              .from(servicos)
+              .where(eq(servicos.id, ordem.servicoId));
+
+            valorCobradoInicial = servicoDaOrdem?.valor ?? null;
           }
 
           if (proximoStatus === "andamento") {
@@ -627,6 +616,7 @@ router.patch(
                 proximoStatus === "concluida"
                   ? new Date()
                   : ordem.concluidaEm,
+              valorCobrado: valorCobradoInicial,
             })
             .where(
               and(
@@ -652,6 +642,175 @@ router.patch(
       );
 
       res.json(ordemAtualizada);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// Pagamento (pontos 11 e 17). Registra o valor realmente cobrado, a forma de
+// pagamento, se o pagamento foi confirmado e, quando o valor difere do valor
+// do serviço, o motivo. Disponível com o atendimento em andamento ou
+// concluído. Depois de confirmado, só o CEO consegue alterar.
+router.patch(
+  "/:id/pagamento",
+  roles("ceo", "atendente", "tecnico"),
+  async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!validId(id)) {
+        return res.status(400).json({
+          error: "ID inválido.",
+        });
+      }
+
+      const valorInformado = String(
+        req.body.valorCobrado ?? "",
+      ).replace(",", ".");
+      const valorCobrado = Number(valorInformado);
+
+      if (
+        valorInformado.trim() === "" ||
+        !Number.isFinite(valorCobrado) ||
+        valorCobrado < 0 ||
+        valorCobrado > 99999999.99
+      ) {
+        return res.status(400).json({
+          error: "Informe um valor cobrado válido.",
+        });
+      }
+
+      const formaPagamento = req.body.formaPagamento
+        ? String(req.body.formaPagamento)
+        : null;
+
+      if (
+        formaPagamento !== null &&
+        !FORMAS_PAGAMENTO.includes(formaPagamento)
+      ) {
+        return res.status(400).json({
+          error: "Forma de pagamento inválida.",
+        });
+      }
+
+      const confirmado = Boolean(req.body.pagamentoConfirmado);
+      const observacao =
+        String(req.body.observacaoPagamento || "").trim() ||
+        null;
+
+      if (observacao && observacao.length > 255) {
+        return res.status(400).json({
+          error:
+            "A observação deve ter no máximo 255 caracteres.",
+        });
+      }
+
+      if (confirmado && !formaPagamento) {
+        return res.status(400).json({
+          error:
+            "Informe a forma de pagamento para confirmar o pagamento.",
+        });
+      }
+
+      await db.transaction(async (tx) => {
+        const [linha] = await tx
+          .select({
+            ordem: ordensServico,
+            tecnicoId: agendamentos.tecnicoId,
+            servicoValor: servicos.valor,
+          })
+          .from(ordensServico)
+          .innerJoin(
+            agendamentos,
+            eq(ordensServico.agendamentoId, agendamentos.id),
+          )
+          .innerJoin(
+            servicos,
+            eq(ordensServico.servicoId, servicos.id),
+          )
+          .where(eq(ordensServico.id, id));
+
+        if (!linha) {
+          throw erroHttp("Ordem de serviço não encontrada.", 404);
+        }
+
+        const { ordem } = linha;
+
+        if (
+          req.usuario.perfil === "tecnico" &&
+          linha.tecnicoId !== req.usuario.id
+        ) {
+          throw erroHttp(
+            "Você não pode alterar esta ordem de serviço.",
+            403,
+          );
+        }
+
+        if (ordem.status === "aberta") {
+          throw erroHttp(
+            "O pagamento só pode ser registrado depois que o atendimento for iniciado.",
+            409,
+          );
+        }
+
+        if (
+          ordem.pagamentoConfirmado &&
+          req.usuario.perfil !== "ceo"
+        ) {
+          throw erroHttp(
+            "Pagamento já confirmado. Somente o CEO pode alterá-lo.",
+            403,
+          );
+        }
+
+        if (
+          emCentavos(valorCobrado) !== emCentavos(linha.servicoValor) &&
+          !observacao
+        ) {
+          throw erroHttp(
+            "O valor cobrado é diferente do valor do serviço. Informe o motivo na observação.",
+            400,
+          );
+        }
+
+        const jaConfirmado = Boolean(ordem.pagamentoConfirmado);
+
+        const [atualizada] = await tx
+          .update(ordensServico)
+          .set({
+            valorCobrado: valorCobrado.toFixed(2),
+            formaPagamento,
+            pagamentoConfirmado: confirmado ? 1 : 0,
+            pagamentoConfirmadoEm: confirmado
+              ? jaConfirmado
+                ? ordem.pagamentoConfirmadoEm
+                : new Date()
+              : null,
+            observacaoPagamento: observacao,
+            pagamentoUsuarioId: req.usuario.id,
+          })
+          .where(
+            and(
+              eq(ordensServico.id, id),
+              eq(ordensServico.status, ordem.status),
+            ),
+          )
+          .returning();
+
+        if (!atualizada) {
+          throw erroHttp(
+            "A ordem foi alterada. Atualize a tela e tente novamente.",
+            409,
+          );
+        }
+      });
+
+      const [resultado] = await selecaoComNomes().where(
+        eq(ordensServico.id, id),
+      );
+
+      res.json(resultado);
     } catch (error) {
       next(error);
     }

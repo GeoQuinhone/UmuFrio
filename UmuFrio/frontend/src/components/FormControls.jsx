@@ -1,10 +1,11 @@
 import React from "react";
 
-export function Field({ label, error, children }) {
+export function Field({ label, error, hint, children }) {
   return (
     <label className="field">
       <span className="field-label">{label}</span>
       {children}
+      {hint && !error && <span className="field-hint">{hint}</span>}
       {error && <span className="field-error">{error}</span>}
     </label>
   );

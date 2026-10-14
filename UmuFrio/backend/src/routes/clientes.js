@@ -12,11 +12,14 @@ const TIPOS_RESIDENCIA = [
   "barracao",
 ];
 
-function validarCliente(body) {
+// O CPF só é validado no cadastro: na edição ele não é alterado, e clientes
+// antigos podem ter CPF fora do padrão (ex.: dados de teste), o que não deve
+// impedir a edição de nome, telefone ou endereço.
+function validarCliente(body, { validarCpf = true } = {}) {
   if (
     !body.nome?.trim() ||
     !body.telefone?.trim() ||
-    !cpfValido(body.cpf)
+    (validarCpf && !cpfValido(body.cpf))
   ) {
     return "Preencha nome, CPF válido e telefone.";
   }
@@ -117,10 +120,10 @@ router.put(
         });
       }
 
-      const error = validarCliente({
-        ...req.body,
-        cpf: req.body.cpf || cliente.cpf,
-      });
+      const error = validarCliente(
+        { ...req.body, cpf: cliente.cpf },
+        { validarCpf: false },
+      );
 
       if (error) {
         return res.status(400).json({ error });
