@@ -140,6 +140,52 @@ const icons = {
       <path d="M16 14.5h2.5" />
     </>
   ),
+  chart: (
+    <>
+      <path d="M4 20V10" />
+      <path d="M10 20V4" />
+      <path d="M16 20v-7" />
+      <path d="M22 20H2" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M12 4v11" />
+      <path d="m7 11 5 5 5-5" />
+      <path d="M5 20h14" />
+    </>
+  ),
+  chat: (
+    <>
+      <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12Z" />
+      <path d="M8.5 11h7" />
+      <path d="M8.5 14h4" />
+    </>
+  ),
+  send: (
+    <>
+      <path d="M21 3 10 14" />
+      <path d="m21 3-7 18-4-7-7-4 18-7Z" />
+    </>
+  ),
+  pin: (
+    <>
+      <path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z" />
+      <circle cx="12" cy="9.5" r="2.5" />
+    </>
+  ),
+  whatsapp: (
+    <>
+      <path d="M3 21l1.7-5.1A8.5 8.5 0 1 1 8.2 19.4L3 21Z" />
+      <path d="M9 8.5c0 3.5 3 6.5 6.5 6.5l1.2-1.5-2-1-1 .7a4 4 0 0 1-2-2l.7-1-1-2L9 8.5Z" />
+    </>
+  ),
+  copy: (
+    <>
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+    </>
+  ),
 };
 
 export default function Icon({

@@ -4,9 +4,11 @@ import {
   varchar,
   numeric,
   pgEnum,
+  boolean,
   timestamp,
   date,
   time,
+  text,
 } from "drizzle-orm/pg-core";
 
 export const statusClienteEnum = pgEnum("status_cliente", ["ativo", "inativo"]);
@@ -31,6 +33,11 @@ export const clientes = pgTable("clientes", {
   complemento: varchar("complemento", { length: 150 }),
   status: statusClienteEnum("status").notNull().default("ativo"),
   inativadoEm: timestamp("inativado_em"),
+  // Fase 5: coordenadas usadas para validar o check-in do técnico.
+  latitude: numeric("latitude", { precision: 9, scale: 6 }),
+  longitude: numeric("longitude", { precision: 9, scale: 6 }),
+  geoEndereco: varchar("geo_endereco", { length: 400 }),
+  geocodificadoEm: timestamp("geocodificado_em"),
 });
 
 export const usuarios = pgTable("usuarios", {
@@ -101,6 +108,25 @@ export const ordensServico = pgTable("ordens_servico", {
   pagamentoUsuarioId: integer("pagamento_usuario_id").references(() => usuarios.id),
 });
 
+// Fase 4: cobranças PIX. Cada ordem pode ter várias (uma expira ou é cancelada
+// e outra é gerada), mas só uma pendente por vez (índice parcial no banco).
+export const cobrancasPix = pgTable("cobrancas_pix", {
+  id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
+  ordemId: integer("ordem_id").notNull().references(() => ordensServico.id, { onDelete: "cascade" }),
+  usuarioId: integer("usuario_id").references(() => usuarios.id),
+  valor: numeric("valor", { precision: 10, scale: 2 }).notNull(),
+  status: varchar("status", { length: 12 }).notNull().default("pendente"),
+  modo: varchar("modo", { length: 12 }).notNull(),
+  mpPaymentId: varchar("mp_payment_id", { length: 40 }),
+  referencia: varchar("referencia", { length: 60 }).notNull(),
+  codigoCopiaCola: text("codigo_copia_cola"),
+  qrCodeBase64: text("qr_code_base64"),
+  ticketUrl: text("ticket_url"),
+  criadoEm: timestamp("criado_em").notNull().defaultNow(),
+  expiraEm: timestamp("expira_em"),
+  aprovadoEm: timestamp("aprovado_em"),
+});
+
 export const movimentacoesEstoque = pgTable("movimentacoes_estoque", {
   id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
   produtoId: integer("produto_id").notNull().references(() => produtos.id),
@@ -110,4 +136,20 @@ export const movimentacoesEstoque = pgTable("movimentacoes_estoque", {
   quantidade: integer("quantidade").notNull(),
   data: timestamp("data").notNull().defaultNow(),
   extra: integer("extra").notNull().default(0),
+});
+
+// Fase 5: check-in/check-out geolocalizado (um de cada por ordem de serviço).
+export const registrosLocalizacao = pgTable("registros_localizacao", {
+  id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
+  ordemId: integer("ordem_id").notNull().references(() => ordensServico.id, { onDelete: "cascade" }),
+  tipo: varchar("tipo", { length: 8 }).notNull(),
+  usuarioId: integer("usuario_id").references(() => usuarios.id),
+  latitude: numeric("latitude", { precision: 9, scale: 6 }).notNull(),
+  longitude: numeric("longitude", { precision: 9, scale: 6 }).notNull(),
+  precisaoM: numeric("precisao_m", { precision: 9, scale: 1 }),
+  distanciaM: integer("distancia_m"),
+  raioM: integer("raio_m").notNull(),
+  dentroRaio: boolean("dentro_raio"),
+  justificativa: varchar("justificativa", { length: 255 }),
+  criadoEm: timestamp("criado_em").notNull().defaultNow(),
 });

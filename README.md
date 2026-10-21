@@ -89,6 +89,103 @@ ao agendar, escolhe-se também o serviço e o sistema já cria a OS vinculada.
 - O painel inicial do `ceo` mostra o faturamento do mês (pagamentos confirmados)
   e o valor a receber.
 
+### PIX (Mercado Pago)
+
+- Na tela de pagamento, ao escolher a forma **PIX**, aparece o painel de
+  cobrança: **Gerar PIX** mostra o QR Code, o código copia e cola, o valor e a
+  contagem regressiva da validade (padrão: 30 minutos).
+- A tela consulta o servidor a cada poucos segundos. Quando o pagamento é
+  identificado, o pagamento do atendimento é **confirmado automaticamente**
+  (forma PIX, data e hora da confirmação).
+- Dois modos, escolhidos pelo `.env` do backend:
+  - **Mercado Pago** — com `MP_ACCESS_TOKEN` definido. Use primeiro o token de
+    **teste** da sua conta do Mercado Pago.
+  - **Demonstração** — sem token (ou com `PIX_MODO=simulado`). O código é
+    fictício e o botão **Simular pagamento (demonstração)** aprova a cobrança;
+    ele não funciona em cobranças reais.
+- A confirmação nunca vem do navegador: o servidor consulta o status direto na
+  API do Mercado Pago. O aviso automático (webhook) é opcional e também só
+  serve de gatilho para essa consulta; sem ele a baixa acontece pela consulta
+  da própria tela, o que funciona inclusive em `localhost`.
+- Regras: só atendimentos em andamento ou concluídos; não gera PIX para
+  pagamento já confirmado ou valor zero; se o valor cobrado for diferente do
+  valor do serviço, a observação é obrigatória (como no pagamento comum). Há no
+  máximo uma cobrança pendente por atendimento; mudar o valor gera uma nova.
+- Variáveis (todas opcionais, veja `backend/.env.example`): `MP_ACCESS_TOKEN`,
+  `PIX_MODO`, `MP_NOTIFICATION_URL`, `MP_WEBHOOK_SECRET`,
+  `MP_PAYER_EMAIL_PADRAO`, `PIX_EXPIRACAO_MINUTOS`.
+- Para receber o aviso automático, cadastre no painel do Mercado Pago a URL
+  pública `https://SEU-DOMINIO/api/pix/webhook` (evento "Pagamentos") e copie o
+  segredo da assinatura para `MP_WEBHOOK_SECRET`.
+
+### Relatórios estratégicos (somente CEO)
+
+Tela **Relatórios** (`/relatorios`), com filtro de período (mês atual, mês
+anterior, últimos 30 dias, ano atual ou datas livres; máximo de 366 dias) e
+quatro abas. Cada aba mostra o critério de cálculo e exporta **CSV** (separador
+`;`, decimal com vírgula e acentos corretos no Excel) e **PDF**.
+
+**PDF (Fase 6):** os botões "PDF desta aba" e "PDF completo" geram o arquivo no
+próprio navegador, a partir dos mesmos números já carregados na tela (nada é
+recalculado e nada é enviado a terceiros). O PDF traz cabeçalho com o período,
+cartões-resumo, gráfico de faturamento, barras, tabelas, o critério de cálculo e
+rodapé com data/hora e paginação. O gerador é próprio, sem dependências
+(`frontend/src/utils/pdfDoc.js` e `relatorioPdf.js`).
+
+| Aba | O que mostra | Critério |
+| --- | --- | --- |
+| Faturamento | total, ticket médio, a receber, gráfico por dia (ou por mês em períodos longos) e por forma de pagamento | pagamentos confirmados no período, pela data da confirmação |
+| Serviços e técnicos | ranking de serviços, receita e recebido; concluídos, não realizados e tempo médio por técnico | atendimentos agendados no período |
+| Estoque | unidades consumidas, peças extras, custo das peças, mais consumidos e produtos abaixo do mínimo | saídas de estoque no período; "abaixo do mínimo" é a situação de hoje |
+| Atendimentos | situação (concluídos, em andamento, agendados, cancelados, não realizados), taxa de conclusão, tempo médio e motivos | atendimentos agendados no período |
+
+O fuso usado para "dia" e "mês" é `America/Sao_Paulo` (altere com
+`RELATORIOS_FUSO`). Os outros perfis não acessam a tela nem a API.
+
+### Check-in e check-out geolocalizado (técnico)
+
+No detalhe do atendimento (`AtendimentoDialog`) o técnico responsável registra a
+chegada (**check-in**) e a saída (**check-out**) usando a localização do aparelho.
+
+- A distância até o endereço do cliente é calculada **no servidor** (fórmula de
+  Haversine); o navegador só envia latitude, longitude e precisão.
+- O raio permitido é `CHECKIN_RAIO_METROS` (padrão 150 m, entre 20 e 5000).
+  **Fora do raio** o servidor responde 422 (`FORA_DO_RAIO`) e o registro só é
+  aceito com uma **justificativa** (mín. 5 caracteres); ele fica marcado como
+  "fora do raio".
+- Um check-in e um check-out por ordem. O check-in vale para atendimentos
+  abertos ou em andamento; o check-out exige check-in e atendimento iniciado.
+- Só o técnico do atendimento registra; CEO e atendente apenas consultam.
+- As coordenadas do cliente são obtidas **no primeiro check-in** pelo
+  Nominatim/OpenStreetMap (gratuito, 1 consulta/s, com cache na tabela
+  `clientes`) e refeitas se o endereço mudar. Se o endereço não for encontrado, o
+  registro é salvo sem distância ("sem referência").
+- A aba **Atendimentos** dos relatórios mostra check-ins, check-outs, fora do
+  raio e sem referência.
+- O navegador só libera a localização em **HTTPS** (ou `localhost`).
+
+### Chat de atendimento na tela de login
+
+Botão "Fale conosco" na tela de login, aberto a visitantes (sem login). Informa
+sobre serviços, horário e formas de pagamento e **encaminha para o WhatsApp**;
+não coleta dados nem agenda.
+
+- **Modo IA**: usa a API da Anthropic quando `ANTHROPIC_API_KEY` está definida
+  (modelo em `CHAT_MODELO`).
+- **Modo demonstração**: respostas por palavras-chave, sem chave nem internet
+  (também usado se a API falhar ou com `CHAT_MODO=demonstracao`).
+- Limites: 12 mensagens por IP a cada 5 min e `CHAT_LIMITE_HORA` (padrão 300)
+  no total por hora; mensagens de até 600 caracteres. Nada da conversa é gravado.
+- `CHAT_HORARIO`, `CHAT_CIDADE` e `CHAT_EMPRESA_NOME` personalizam as respostas
+  (veja `backend/.env.example`).
+
+**Atalho do WhatsApp (Fase 6):** a tela de login tem o botão "Falar no WhatsApp"
+e o chat tem o ícone no cabeçalho, o botão quando o assistente encaminha e o
+link "Prefere o WhatsApp?" no rodapé. Todos abrem a conversa com o número
+oficial **(44) 9804-9224** e a mensagem pronta "Olá! Vim pelo site da UmuFrio e
+gostaria de atendimento." Para trocar o número, defina `CHAT_WHATSAPP` no `.env`
+(só dígitos, com DDD).
+
 ### Interface
 
 - Confirmações de exclusão e cancelamento em modal próprio, com foco preso e
@@ -103,6 +200,7 @@ ao agendar, escolhe-se também o serviço e o sistema já cria a OS vinculada.
 | `/usuarios` | Usuários (somente `ceo`) |
 | `/servicos` | Serviços |
 | `/estoque` | Estoque |
+| `/relatorios` | Relatórios (somente `ceo`) |
 | `/agendamentos` | Lista de agendamentos e ordens |
 | `/agendamentos/novo` | Novo agendamento |
 | `/agendamentos/12` | Detalhes do atendimento 12 |
@@ -116,10 +214,10 @@ redireciona para `/agendamentos`.
 
 | Perfil | Pode |
 | --- | --- |
-| `ceo` | Tudo, incluindo usuários e exclusões |
+| `ceo` | Tudo, incluindo usuários, exclusões e relatórios |
 | `atendente` | Clientes, serviços e agendamentos (com ordem de serviço e pagamento) |
 | `estoquista` | Estoque |
-| `tecnico` | Ver os próprios atendimentos, iniciar e concluir, descontar peças extras, registrar pagamento e atendimento não realizado |
+| `tecnico` | Ver os próprios atendimentos, iniciar e concluir, fazer check-in/check-out, descontar peças extras, registrar pagamento e atendimento não realizado |
 
 ## Tecnologias
 
@@ -168,6 +266,11 @@ UmuFrio/
 | Serviços | `/api/servicos` (inclui `PATCH /:id/status` para inativar e reativar) |
 | Ordens de serviço | `/api/ordens-servico` (inclui `PATCH /:id/avancar`, `PATCH /:id/pagamento` e `/:id/pecas-extras`) |
 | Produtos e estoque | `/api/produtos` |
+| PIX do atendimento | `GET/POST /api/ordens-servico/:id/pix`, `POST /:id/pix/cancelar`, `POST /:id/pix/simular` (só no modo demonstração) |
+| Aviso do Mercado Pago | `POST /api/pix/webhook` (público; valida a assinatura e consulta o status na API) |
+| Check-in/check-out | `GET /api/ordens-servico/:id/localizacao`, `POST /:id/checkin`, `POST /:id/checkout` (técnico do atendimento) |
+| Chat (público) | `GET /api/chat/config` e `POST /api/chat` |
+| Relatórios (CEO) | `GET /api/relatorios?de=&ate=` e `GET /api/relatorios/csv/:tabela?de=&ate=` |
 
 ## Como executar localmente
 
@@ -252,7 +355,27 @@ npm test
 ```
 
 `npm run check` verifica a sintaxe de `app.js` e `server.js`. `npm test` roda os
-testes Node.js do projeto.
+testes Node.js do projeto (distância e geocodificação, chat, cliente do Mercado Pago, assinatura do webhook, período e
+CSV dos relatórios; não precisam de banco nem de internet).
+
+### Dados de teste (Fase 4)
+
+Para demonstrar o PIX, os relatórios e os check-ins com dados realistas, o projeto traz um
+script de carga. **Ele apaga** clientes, agendamentos, ordens de serviço,
+cobranças PIX e movimentações de estoque (usuários, serviços e produtos são
+mantidos) e cria 14 clientes e cerca de 100 atendimentos entre 50 dias atrás e 5
+dias à frente, com pagamentos em todas as formas, atendimentos a receber, não
+realizados, cancelados e consumo de estoque, além de coordenadas nos clientes e check-ins/check-outs (alguns fora do raio). Use só em banco de teste.
+
+```powershell
+cd backend
+npm run db:seed -- --sim
+```
+
+(ou `psql "$DATABASE_URL" -f seed-fase4.sql`). Pode rodar de novo quando quiser:
+ele sempre recomeça do zero. Logins de teste, senha `Teste@123`:
+`ceo@umufrio.com.br`, `atendente@umufrio.com.br`, `estoque@umufrio.com.br`,
+`tecnico1@umufrio.com.br` e `tecnico2@umufrio.com.br`.
 
 ## Segurança
 
@@ -263,13 +386,10 @@ testes Node.js do projeto.
 
 ## Próximos passos
 
-Ideias da Fase 2 do TCC ainda não implementadas:
+Ainda não implementado (relatórios em PDF e atalho do WhatsApp entraram na Fase 6):
 
-- Pagamento online (por exemplo PIX ou Mercado Pago). Hoje o pagamento é
-  registrado manualmente, com forma e confirmação.
-- Relatórios estratégicos, a partir dos dados de atendimentos, pagamentos e estoque.
-- Check-in e check-out geolocalizado do técnico.
-- Integração com WhatsApp.
+- Itens da Fase 7 (a definir).
+- Integração com a API do WhatsApp (hoje o chat apenas encaminha por link).
 
 ## Colaboração
 

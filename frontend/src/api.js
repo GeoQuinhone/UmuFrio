@@ -30,7 +30,6 @@ export async function apiRequest(path, options = {}) {
     try {
       data = await response.json();
     } catch {
-      // A resposta pode não conter JSON.
     }
   }
 
@@ -52,9 +51,13 @@ export async function apiRequest(path, options = {}) {
   }
 
   if (!response.ok) {
-    throw new Error(
+    const erro = new Error(
       data?.error || `Erro ${response.status} ao acessar ${path}`,
     );
+    // Dados extras do servidor (ex: Codigo: "Fora_Do_Raio", distancia)
+    erro.status = response.status;
+    erro.dados = data;
+    throw erro;
   }
 
   return data;
