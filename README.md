@@ -242,6 +242,12 @@ Invoke-RestMethod -Method Post -Uri http://localhost:3001/api/auth/bootstrap `
 O CPF precisa ser válido (dígito verificador). Depois, entre pela tela de login e
 cadastre os demais usuários em **Usuários**.
 
+## Publicação
+
+Para colocar o sistema na internet (Cloudflare Pages, Render e Neon, sem custo),
+siga o [DEPLOY.md](DEPLOY.md).
+
+
 ## Verificações
 
 No `backend/`:
