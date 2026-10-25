@@ -2,7 +2,7 @@
   "name": "umufrio-backend",
   "private": true,
   "version": "0.1.0",
-    "type": "module",
+  "type": "module",
   "engines": {
     "node": ">=20"
   },
@@ -11,6 +11,7 @@
     "start": "node src/server.js",
     "db:generate": "drizzle-kit generate --config=drizzle.config.cjs",
     "db:migrate": "node src/db/migrate.js",
+    "db:seed": "node src/db/seed.js",
     "db:push": "drizzle-kit push --config=drizzle.config.cjs",
     "db:studio": "drizzle-kit studio --config=drizzle.config.cjs",
     "check": "node --check src/app.js && node --check src/server.js",
