@@ -52,6 +52,35 @@ function chaveDataHora(atendimento) {
   return `${String(atendimento.data || "").slice(0, 10)} ${String(atendimento.hora || "").slice(0, 5)}`;
 }
 
+const TEXTO_AVISO_WHATSAPP = {
+  enviado: "Cliente avisado pelo WhatsApp.",
+  nao_configurado: "Avise o cliente pelo WhatsApp: a mensagem já está pronta.",
+  erro: "Não foi possível avisar o cliente automaticamente. Envie pelo WhatsApp.",
+  telefone_invalido: "O telefone do cliente não é válido para WhatsApp. Confira o cadastro.",
+};
+
+// Resultado do aviso ao cliente depois de iniciar ou concluir o atendimento.
+// Quando o envio automático não acontece, oferece o link wa.me com a mensagem.
+function AvisoWhatsApp({ aviso, onClose }) {
+  if (!aviso) return null;
+  const enviado = aviso.status === "enviado";
+
+  return (
+    <div className={`whatsapp-aviso ${enviado ? "whatsapp-aviso-ok" : "whatsapp-aviso-pendente"}`} role="status">
+      <span>{TEXTO_AVISO_WHATSAPP[aviso.status]}</span>
+      {!enviado && aviso.link && (
+        <a href={aviso.link} target="_blank" rel="noreferrer" className="whatsapp-aviso-link">
+          Enviar pelo WhatsApp
+        </a>
+      )}
+      <button type="button" onClick={onClose} aria-label="Fechar">
+        ×
+      </button>
+    </div>
+  );
+}
+
+
 function abaDoAtendimento(atendimento) {
   if (atendimento.status === "cancelado") return "cancelados";
   if (atendimento.ordemStatus === "concluida") return "concluidos";
@@ -113,6 +142,7 @@ export default function Agendamentos({
   const [showQuickClient, setShowQuickClient] = useState(false);
   const [errors, setErrors] = useState({});
   const [banner, setBanner] = useState("");
+  const [avisoWhatsApp, setAvisoWhatsApp] = useState(null);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -314,10 +344,11 @@ export default function Agendamentos({
     });
     if (!ok) return;
 
-    try {
-      await ordensServico.action(atendimento.ordemId, "/avancar");
+        try {
+      const resultado = await ordensServico.action(atendimento.ordemId, "/avancar");
       await recarregarTudo();
       setBanner("");
+      setAvisoWhatsApp(resultado?.aviso || null);
     } catch (actionError) {
       setBanner(actionError.message);
     }
@@ -518,6 +549,7 @@ export default function Agendamentos({
     >
       <div className="scheduling-orders-screen schedule-screen">
         <ErrorBanner message={error || tecnicos?.error || banner} onClose={() => setBanner("")} />
+        <AvisoWhatsApp aviso={avisoWhatsApp} onClose={() => setAvisoWhatsApp(null)} />
 
         <section className="orders-summary-grid" aria-label="Resumo dos atendimentos">
           {stats.map((stat) => (
