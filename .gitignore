@@ -1,0 +1,7 @@
+node_modules
+.env
+dist
+
+# Dump antigo do MariaDB com dados pessoais (nomes, e-mails, telefones e senhas).
+# Fica só na máquina local; não deve ir para o GitHub.
+umufrio.sql

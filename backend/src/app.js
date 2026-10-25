@@ -14,7 +14,17 @@ import { errorHandler, notFound } from "./middleware/errorHandler.js";
 
 export const app = express();
 
-app.use(cors());
+// Em produção, CORS_ORIGIN lista os endereços do frontend autorizados a chamar
+// a API (separados por vírgula). Sem a variável, como no ambiente local, a API
+// aceita qualquer origem.
+const origensPermitidas = (process.env.CORS_ORIGIN || "")
+  .split(",")
+  .map((origem) => origem.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
+
+app.use(
+  cors(origensPermitidas.length ? { origin: origensPermitidas } : undefined),
+);
 app.use(express.json());
 
 app.get("/api/health", (_req, res) => {
