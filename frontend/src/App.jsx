@@ -9,6 +9,7 @@ import AppShell from "./components/AppShell.jsx";
 import Welcome from "./pages/Welcome.jsx";
 import Clientes from "./pages/Clientes.jsx";
 import Agendamentos from "./pages/Agendamentos.jsx";
+import Relatorios from "./pages/Relatorios.jsx";
 import Estoque from "./pages/Estoque.jsx";
 import Usuarios from "./pages/Usuarios.jsx";
 import Servicos from "./pages/Servicos.jsx";
@@ -215,6 +216,11 @@ function AppContent() {
               onBack={voltarParaInicio}
             />,
           )}
+        />
+
+        <Route
+          path="/relatorios"
+          element={protegida(["ceo"], <Relatorios onBack={voltarParaInicio} />)}
         />
 
         <Route path="*" element={<Navigate to="/" replace />} />

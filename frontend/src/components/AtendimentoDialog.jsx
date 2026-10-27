@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 
+import CheckinPanel from "./CheckinPanel.jsx";
 import Icon from "./Icon.jsx";
 import { Badge, Field, Select, TextInput } from "./FormControls.jsx";
 import { dialogKeyDown } from "./dialogUtils.js";
@@ -307,6 +308,11 @@ export default function AtendimentoDialog({
         ) : (
           <>
             <Timeline atendimento={atendimento} />
+
+            <CheckinPanel
+              ordemId={atendimento.ordemId}
+              ordemStatus={atendimento.ordemStatus}
+            />
 
             {podeRegistrarPagamento(atendimento) ? (
               <Pagamento

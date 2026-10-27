@@ -187,6 +187,50 @@ export const migrations = [
    ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS pagamento_confirmado_em timestamptz;
    ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS observacao_pagamento varchar(255);
    ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS pagamento_usuario_id integer REFERENCES usuarios(id)`,
+  // Fase 4: cobranças PIX (Mercado Pago ou simuladas) ligadas à ordem de serviço.
+  `CREATE TABLE IF NOT EXISTS cobrancas_pix (
+     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+     ordem_id integer NOT NULL REFERENCES ordens_servico(id) ON DELETE CASCADE,
+     usuario_id integer REFERENCES usuarios(id),
+     valor numeric(10,2) NOT NULL,
+     status varchar(12) NOT NULL DEFAULT 'pendente',
+     modo varchar(12) NOT NULL,
+     mp_payment_id varchar(40),
+     referencia varchar(60) NOT NULL,
+     codigo_copia_cola text,
+     qr_code_base64 text,
+     ticket_url text,
+     criado_em timestamptz NOT NULL DEFAULT now(),
+     expira_em timestamptz,
+     aprovado_em timestamptz,
+     CONSTRAINT ck_cobrancas_pix_status CHECK (status IN ('pendente','aprovado','cancelado','expirado')),
+     CONSTRAINT ck_cobrancas_pix_modo CHECK (modo IN ('mercadopago','simulado'))
+   );
+   CREATE INDEX IF NOT EXISTS ix_cobrancas_pix_ordem ON cobrancas_pix (ordem_id, id DESC);
+   CREATE UNIQUE INDEX IF NOT EXISTS ux_cobrancas_pix_mp ON cobrancas_pix (mp_payment_id) WHERE mp_payment_id IS NOT NULL;
+   CREATE UNIQUE INDEX IF NOT EXISTS ux_cobrancas_pix_pendente ON cobrancas_pix (ordem_id) WHERE status = 'pendente'`,
+  // Fase 5: coordenadas do cliente (geocodificadas sob demanda) e registros de
+  // check-in/check-out geolocalizados do técnico.
+  `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS latitude numeric(9,6);
+   ALTER TABLE clientes ADD COLUMN IF NOT EXISTS longitude numeric(9,6);
+   ALTER TABLE clientes ADD COLUMN IF NOT EXISTS geo_endereco varchar(400);
+   ALTER TABLE clientes ADD COLUMN IF NOT EXISTS geocodificado_em timestamptz;
+   CREATE TABLE IF NOT EXISTS registros_localizacao (
+     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+     ordem_id integer NOT NULL REFERENCES ordens_servico(id) ON DELETE CASCADE,
+     tipo varchar(8) NOT NULL,
+     usuario_id integer REFERENCES usuarios(id),
+     latitude numeric(9,6) NOT NULL,
+     longitude numeric(9,6) NOT NULL,
+     precisao_m numeric(9,1),
+     distancia_m integer,
+     raio_m integer NOT NULL,
+     dentro_raio boolean,
+     justificativa varchar(255),
+     criado_em timestamptz NOT NULL DEFAULT now(),
+     CONSTRAINT ck_registros_localizacao_tipo CHECK (tipo IN ('checkin','checkout')),
+     CONSTRAINT ux_registros_localizacao UNIQUE (ordem_id, tipo)
+   )`,
 ];
 
 export async function runMigrations(client) {

@@ -922,6 +922,7 @@ export default function Agendamentos({
         atendimento={alvo}
         perfil={user?.perfil}
         onSave={salvarPagamento}
+        onPagamentoConfirmado={() => crud.reload()}
         onClose={fecharPagamento}
       />
     )}

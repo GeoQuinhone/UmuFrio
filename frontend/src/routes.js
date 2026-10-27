@@ -50,6 +50,14 @@ export const ROTAS = [
     icon: "calendar",
     roles: ["ceo", "atendente", "tecnico"],
   },
+  {
+    // Fase 4: relatórios estratégicos, somente o CEO.
+    key: "relatorios",
+    path: "/relatorios",
+    label: "Relatórios",
+    icon: "chart",
+    roles: ["ceo"],
+  },
 ];
 
 export function caminhoDaChave(key) {

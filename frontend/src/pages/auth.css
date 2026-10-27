@@ -359,3 +359,32 @@
     grid-column: auto;
   }
 }
+/* Fase 6: atalho do WhatsApp na tela de login. */
+.auth-whatsapp {
+  display: grid;
+  gap: 8px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #dbe5e8;
+  color: #5d6f76;
+  font-size: 12px;
+  text-align: center;
+}
+
+.auth-whatsapp a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  border-radius: 8px;
+  background: #1fa855;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.auth-whatsapp a:hover {
+  background: #188f48;
+}

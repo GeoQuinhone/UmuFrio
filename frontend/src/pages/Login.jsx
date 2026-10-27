@@ -2,7 +2,9 @@ import React, { useState } from "react";
 
 import { useAuth } from "../AuthContext.jsx";
 import { apiRequest } from "../api.js";
+import ChatWidget from "../components/ChatWidget.jsx";
 import Icon from "../components/Icon.jsx";
+import { useWhatsappUrl } from "../utils/whatsapp.js";
 import "./auth.css";
 
 const emptyRecoveryForm = {
@@ -205,6 +207,8 @@ export default function Login() {
     );
   }
 
+  const whatsappUrl = useWhatsappUrl();
+
   return (
     <div className="auth-login">
       <section className="auth-login-art" aria-label="UmuFrio Gestão Técnica">
@@ -280,8 +284,16 @@ export default function Login() {
               {loading ? "Entrando..." : "Entrar no painel"}
             </button>
           </form>
+          <div className="auth-whatsapp">
+            <span>Precisa de ajuda ou quer contratar um serviço?</span>
+            <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
+              <Icon name="whatsapp" size={18} />
+              Falar no WhatsApp
+            </a>
+          </div>
         </div>
       </section>
+      <ChatWidget />
     </div>
   );
 }

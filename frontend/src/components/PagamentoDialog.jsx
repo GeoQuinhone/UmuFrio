@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import { Field, Select, TextInput } from "./FormControls.jsx";
+import PixPanel from "./PixPanel.jsx";
 import { dialogKeyDown } from "./dialogUtils.js";
 import { mascaraMoeda, moedaParaNumero } from "../utils/mascaras.js";
 import {
@@ -27,11 +28,13 @@ export default function PagamentoDialog({
   atendimento,
   perfil,
   onSave,
+  onPagamentoConfirmado,
   onClose,
 }) {
   const dialogRef = useRef(null);
 
-  const confirmadoAntes = Boolean(atendimento.pagamentoConfirmado);
+  const [pixAprovado, setPixAprovado] = useState(false);
+  const confirmadoAntes = Boolean(atendimento.pagamentoConfirmado) || pixAprovado;
   const somenteLeitura = confirmadoAntes && perfil !== "ceo";
   const valorServico = Number(atendimento.servicoValor ?? 0);
 
@@ -61,10 +64,8 @@ export default function PagamentoDialog({
   const diferenca = Math.round(valorNumero * 100) - Math.round(valorServico * 100);
   const valorDiferente = valor !== "" && diferenca !== 0;
 
-  async function salvar(event) {
-    event.preventDefault();
-    if (somenteLeitura) return;
-
+  // Validação comum ao "Salvar pagamento" e ao "Gerar PIX".
+  function validar(exigirConfirmacao = true) {
     const novosErros = {};
 
     if (valor === "") {
@@ -76,13 +77,40 @@ export default function PagamentoDialog({
           ? "Informe o motivo da cobrança a mais."
           : "Informe o motivo do valor menor que o do serviço.";
     }
-    if (confirmado && !forma) {
+    if (exigirConfirmacao && confirmado && !forma) {
       novosErros.forma = "Informe a forma de pagamento para confirmar.";
     }
 
     setErros(novosErros);
     setErroGeral("");
-    if (Object.keys(novosErros).length > 0) return;
+    return Object.keys(novosErros).length === 0;
+  }
+
+  // Grava valor/observação com forma PIX (ainda não confirmado) antes de gerar
+  // a cobrança: o servidor cobra exatamente o valor gravado.
+  async function prepararPix() {
+    if (!validar(false)) {
+      throw new Error("Corrija os campos destacados antes de gerar o PIX.");
+    }
+    await onSave({
+      valorCobrado: valorNumero,
+      formaPagamento: "pix",
+      pagamentoConfirmado: false,
+      observacaoPagamento: observacao.trim() || null,
+    });
+  }
+
+  function aoAprovarPix() {
+    setConfirmado(true);
+    setForma("pix");
+    setPixAprovado(true);
+    onPagamentoConfirmado?.();
+  }
+
+  async function salvar(event) {
+    event.preventDefault();
+    if (somenteLeitura) return;
+    if (!validar()) return;
 
     setSalvando(true);
     try {
@@ -227,6 +255,17 @@ export default function PagamentoDialog({
               disabled={somenteLeitura}
             />
           </Field>
+
+          {forma === "pix" &&
+            atendimento.ordemId &&
+            (pixAprovado || !confirmadoAntes) && (
+              <PixPanel
+                ordemId={atendimento.ordemId}
+                valorAtual={valor === "" ? null : valorNumero}
+                preparar={prepararPix}
+                onAprovado={aoAprovarPix}
+              />
+            )}
 
           <label className="payment-confirm">
             <input

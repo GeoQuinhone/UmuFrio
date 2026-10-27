@@ -87,6 +87,8 @@ essa string em nenhum arquivo do repositório.
 | `SESSION_SECRET` | uma chave aleatória longa (veja abaixo) |
 | `NODE_VERSION` | `20` |
 | `CORS_ORIGIN` | deixe para o passo 5 |
+| `GROQ_API_KEY` | chave do chat com IA (veja o passo 6; sem ela o chat avisa que está indisponível) |
+| `CHAT_MODELO` | modelo de IA do chat, ex.: `openai/gpt-oss-20b` (use o mesmo do seu `.env`) |
 
    Para gerar o `SESSION_SECRET`, rode no seu computador e copie o resultado:
 
@@ -151,7 +153,37 @@ vírgula: `https://umufrio.pages.dev,https://sistema.umufrio.com.br`.
 
 ---
 
-## 6. Primeiro usuário (CEO)
+## 6. Chat com IA (Groq)
+
+O chat da tela de login usa uma IA de verdade. A chave fica **só no backend**.
+
+1. Crie a conta em <https://console.groq.com> e gere uma chave em **API Keys →
+   Create API Key** (começa com `gsk_`). A faixa gratuita atende a apresentação.
+2. No Render, em **Environment**, cadastre `GROQ_API_KEY` com a chave e
+   `CHAT_MODELO` com o modelo que funcionou na sua conta (a lista de modelos
+   disponíveis aparece em `https://api.groq.com/openai/v1/models`, com a chave).
+3. Salve. O serviço reinicia sozinho.
+4. Teste: abra `https://SEU-SERVICO.onrender.com/api/chat/config`. Deve aparecer
+   `"modo":"ia"`. Se aparecer `"modo":"indisponivel"`, a chave não foi lida.
+
+Sem chave (ou se a IA falhar), o chat avisa que está indisponível e encaminha o
+visitante para o WhatsApp (44) 99804-9224. **Nunca** coloque a chave em arquivo
+do repositório nem no frontend.
+
+Variáveis opcionais do backend (todas com valor padrão):
+
+| Variável | Para que serve |
+| --- | --- |
+| `CHAT_WHATSAPP` | número do WhatsApp do chat, só dígitos com DDD (padrão 44998049224) |
+| `CHAT_HORARIO`, `CHAT_CIDADE`, `CHAT_EMPRESA_NOME` | textos que o assistente usa nas respostas |
+| `CHAT_LIMITE_HORA` | teto de mensagens por hora (todas as pessoas) |
+| `CHECKIN_RAIO_METROS` | raio do check-in geolocalizado (padrão 150) |
+| `GEOCODING_EMAIL` | e-mail de contato para a busca de endereços (Nominatim) |
+| `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_TEMPLATE_*` | aviso automático ao cliente pelo WhatsApp (API oficial); sem eles, o aviso fica desligado |
+
+---
+
+## 7. Primeiro usuário (CEO)
 
 O banco publicado começa vazio. **Faça isto logo depois de publicar**: a rota
 `bootstrap` só funciona enquanto não existe nenhum usuário, e quem chamar
@@ -175,7 +207,7 @@ em **Usuários**.
 
 ---
 
-## 7. Testes depois de publicar
+## 8. Testes depois de publicar
 
 - [ ] `/api/health` responde `{"status":"ok"}`
 - [ ] Login do CEO
@@ -185,6 +217,10 @@ em **Usuários**.
 - [ ] Pagamento
 - [ ] Login como técnico **pelo celular**
 - [ ] Recarregar a página em `/agendamentos` (não pode dar erro 404)
+- [ ] `/api/chat/config` mostra `"modo":"ia"` e o chat da tela de login responde
+- [ ] Botão de WhatsApp do login e do chat abre `wa.me/5544998049224` com a mensagem pronta
+- [ ] Relatórios: baixar o PDF de uma aba e o PDF completo
+- [ ] Check-in e check-out do técnico (pelo celular, com a localização liberada)
 
 ---
 
@@ -212,3 +248,6 @@ do Render.
 | Build do Render falha com `DATABASE_URL não definida` | Variável não cadastrada no Render |
 | Build do Render falha na migration | Connection string do Neon incompleta (confira o `?sslmode=require`) |
 | Página em branco no Pages | Build com `VITE_API_URL` ausente ou Root directory diferente de `frontend` |
+| Chat mostra "Assistente indisponível" | `GROQ_API_KEY` não cadastrada no Render (confira `/api/chat/config`) |
+| Chat responde "Estou com instabilidade" | Veja os logs do Render: `Invalid API Key` = chave errada; `model ... does not exist` = ajuste `CHAT_MODELO` para um modelo liberado na sua conta |
+| Check-in não pega a localização | O navegador precisa de HTTPS (o Pages já é) e a permissão de localização liberada |
