@@ -2,9 +2,9 @@
 // só o que já poderia estar num site (serviços ativos, preços de tabela,
 // horário e contato).
 
-// Número oficial de atendimento (Fase 6): (44) 9804-9224. Pode ser trocado com
+// Número oficial de atendimento (Fase 6): (44) 99804-9224. Pode ser trocado com
 // CHAT_WHATSAPP no .env, sem mexer no código.
-export const WHATSAPP_PADRAO = "4498049224";
+export const WHATSAPP_PADRAO = "44998049224";
 
 export function mensagemWhatsapp(config) {
   return `Olá! Vim pelo site da ${config.empresa} e gostaria de atendimento.`;

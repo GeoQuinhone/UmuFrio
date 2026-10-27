@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import { apiRequest } from "../api.js";
 
-// Fase 6 — atalho do WhatsApp. O número oficial é (44) 9804-9224. Se o
+// Fase 6 — atalho do WhatsApp. O número oficial é (44) 99804-9224. Se o
 // servidor tiver outro em CHAT_WHATSAPP, o link dele (vindo de /api/chat/config)
 // vale no lugar deste; se o servidor estiver fora do ar, usamos o padrão.
 export const WHATSAPP_NUMERO = "5544998049224";

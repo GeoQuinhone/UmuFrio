@@ -11,14 +11,16 @@ import {
   servicos,
   servicoPecas,
   produtos,
-  movimentacoesEstoque,
+   movimentacoesEstoque,
   clientes,
+  usuarios,
 } from "../db/schema.js";
 import {
   roles,
   validId,
 } from "../security.js";
 import { erroHttp, excluirOrdem } from "../ordemHelpers.js";
+import { avisarCliente } from "../whatsapp.js";
 
 const router = Router();
 
@@ -641,7 +643,35 @@ router.patch(
         },
       );
 
-      res.json(ordemAtualizada);
+            // Avisa o cliente depois de salvar: uma falha no WhatsApp não desfaz o
+      // avanço do atendimento.
+      const [dadosAviso] = await db
+        .select({
+          clienteNome: clientes.nome,
+          clienteTelefone: clientes.telefone,
+          servicoNome: servicos.nome,
+          tecnicoNome: usuarios.nome,
+        })
+        .from(agendamentos)
+        .innerJoin(clientes, eq(agendamentos.clienteId, clientes.id))
+        .innerJoin(usuarios, eq(agendamentos.tecnicoId, usuarios.id))
+        .innerJoin(servicos, eq(servicos.id, ordemAtualizada.servicoId))
+        .where(eq(agendamentos.id, ordemAtualizada.agendamentoId));
+
+      const aviso = dadosAviso
+        ? await avisarCliente(
+            ordemAtualizada.status === "andamento" ? "iniciado" : "concluido",
+            {
+              ...dadosAviso,
+              horario:
+                ordemAtualizada.status === "andamento"
+                  ? ordemAtualizada.iniciadaEm
+                  : ordemAtualizada.concluidaEm,
+            },
+          )
+        : null;
+
+      res.json({ ...ordemAtualizada, aviso });
     } catch (error) {
       next(error);
     }

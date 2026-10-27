@@ -170,10 +170,13 @@ Botão "Fale conosco" na tela de login, aberto a visitantes (sem login). Informa
 sobre serviços, horário e formas de pagamento e **encaminha para o WhatsApp**;
 não coleta dados nem agenda.
 
-- **Modo IA**: usa a API da Anthropic quando `ANTHROPIC_API_KEY` está definida
-  (modelo em `CHAT_MODELO`).
-- **Modo demonstração**: respostas por palavras-chave, sem chave nem internet
-  (também usado se a API falhar ou com `CHAT_MODO=demonstracao`).
+- **IA de verdade:** com `ANTHROPIC_API_KEY` definida, o assistente usa a API da
+  Anthropic (modelo em `CHAT_MODELO`) e responde só com base nos serviços,
+  horário e formas de pagamento da empresa.
+- **Sem a chave, ou se a IA falhar:** o chat não inventa resposta. Ele avisa que
+  está indisponível e leva o visitante para o WhatsApp.
+- **Modo demonstração** (`CHAT_MODO=demonstracao`): respostas prontas por
+  palavras-chave, só para testes locais sem chave.
 - Limites: 12 mensagens por IP a cada 5 min e `CHAT_LIMITE_HORA` (padrão 300)
   no total por hora; mensagens de até 600 caracteres. Nada da conversa é gravado.
 - `CHAT_HORARIO`, `CHAT_CIDADE` e `CHAT_EMPRESA_NOME` personalizam as respostas
@@ -182,7 +185,7 @@ não coleta dados nem agenda.
 **Atalho do WhatsApp (Fase 6):** a tela de login tem o botão "Falar no WhatsApp"
 e o chat tem o ícone no cabeçalho, o botão quando o assistente encaminha e o
 link "Prefere o WhatsApp?" no rodapé. Todos abrem a conversa com o número
-oficial **(44) 9804-9224** e a mensagem pronta "Olá! Vim pelo site da UmuFrio e
+oficial **(44) 99804-9224** e a mensagem pronta "Olá! Vim pelo site da UmuFrio e
 gostaria de atendimento." Para trocar o número, defina `CHAT_WHATSAPP` no `.env`
 (só dígitos, com DDD).
 
@@ -345,6 +348,12 @@ Invoke-RestMethod -Method Post -Uri http://localhost:3001/api/auth/bootstrap `
 O CPF precisa ser válido (dígito verificador). Depois, entre pela tela de login e
 cadastre os demais usuários em **Usuários**.
 
+## Publicação
+
+Para colocar o sistema na internet (Cloudflare Pages, Render e Neon, sem custo),
+siga o [DEPLOY.md](DEPLOY.md).
+
+
 ## Verificações
 
 No `backend/`:
@@ -369,7 +378,7 @@ realizados, cancelados e consumo de estoque, além de coordenadas nos clientes e
 
 ```powershell
 cd backend
-npm run db:seed -- --sim
+npm run db:seed-teste -- --sim
 ```
 
 (ou `psql "$DATABASE_URL" -f seed-fase4.sql`). Pode rodar de novo quando quiser:
@@ -395,3 +404,10 @@ Ainda não implementado (relatórios em PDF e atalho do WhatsApp entraram na Fas
 
 - Repositório: [GeoQuinhone/UmuFrio](https://github.com/GeoQuinhone/UmuFrio)
 - Integração com a `main` por Pull Request, com revisão da equipe.
+
+## Notas da mesclagem (main + fases-4-a-6)
+
+- `npm run db:seed` (backend): seed de demonstração da `main` — só roda em banco vazio (login demo `Demo@2026`).
+- `npm run db:seed-teste -- --sim`: seed de teste da Fase 4 — **apaga dados**, use só em ambiente de teste.
+- Aviso ao cliente por WhatsApp nas ordens de serviço (do colega) está em `backend/src/whatsapp.js`; veja `DEPLOY.md`.
+- Chat com IA real: defina `GROQ_API_KEY` (gratuito) ou `ANTHROPIC_API_KEY` no `backend/.env` e no painel do Render. Sem chave, o chat avisa que está indisponível e encaminha ao WhatsApp (44) 99804-9224.

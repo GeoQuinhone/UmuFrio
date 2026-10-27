@@ -1,18 +1,37 @@
 import { erroHttp } from "../httpError.js";
 
-// Cliente mínimo da API de mensagens da Anthropic (Claude), com o fetch nativo.
-// A chave fica só no servidor (ANTHROPIC_API_KEY) — nunca vai para o navegador.
-//
-// Variáveis: ANTHROPIC_API_KEY, CHAT_MODELO (padrão claude-haiku-5-5),
-// ANTHROPIC_API_URL (padrão https://api.anthropic.com).
+// Cliente mínimo de IA com o fetch nativo. Dois provedores:
+//  - Groq (gratuito, formato OpenAI): GROQ_API_KEY, CHAT_MODELO (padrão llama-3.3-70b-versatile),
+//    GROQ_API_URL (padrão https://api.groq.com/openai/v1).
+//  - Anthropic (Claude, pago): ANTHROPIC_API_KEY, CHAT_MODELO (padrão claude-haiku-5-5),
+//    ANTHROPIC_API_URL (padrão https://api.anthropic.com).
+// Se as duas chaves existirem, vale a do Groq. A chave fica só no servidor.
 
 const MODELO_PADRAO = "claude-haiku-5-5";
+const MODELO_GROQ_PADRAO = "llama-3.3-70b-versatile";
+
+function provedor(env) {
+  if (String(env.GROQ_API_KEY || "").trim()) return "groq";
+  if (String(env.ANTHROPIC_API_KEY || "").trim()) return "anthropic";
+  return null;
+}
 const TIMEOUT_MS = 20000;
 export const MARCADOR_WHATSAPP = "[[WHATSAPP]]";
 
 export function chatComIA(env = process.env) {
-  return Boolean(String(env.ANTHROPIC_API_KEY || "").trim()) && env.CHAT_MODO !== "demonstracao";
+  return Boolean(provedor(env)) && env.CHAT_MODO !== "demonstracao";
 }
+
+// "ia": assistente de verdade (padrão quando há chave).
+// "demonstracao": respostas prontas por palavras-chave, só se pedido no .env.
+// "indisponivel": sem chave configurada; o chat encaminha para o WhatsApp.
+export function modoChat(env = process.env) {
+  if (chatComIA(env)) return "ia";
+  return env.CHAT_MODO === "demonstracao" ? "demonstracao" : "indisponivel";
+}
+
+export const MENSAGEM_INDISPONIVEL =
+  "Estou com instabilidade neste momento e não consegui responder. Para ser atendido sem demora, fale com nossa equipe pelo WhatsApp.";
 
 export function montarSistema(contexto) {
   const servicos = contexto.servicos.length
@@ -56,25 +75,51 @@ export async function responderComClaude(
   { mensagens, contexto },
   { env = process.env, fetchImpl = globalThis.fetch } = {},
 ) {
-  const base = String(env.ANTHROPIC_API_URL || "https://api.anthropic.com").replace(/\/+$/, "");
+  const qual = provedor(env) || "anthropic";
+  const groq = qual === "groq";
+  const base = groq
+    ? String(env.GROQ_API_URL || "https://api.groq.com/openai/v1").replace(/\/+$/, "")
+    : String(env.ANTHROPIC_API_URL || "https://api.anthropic.com").replace(/\/+$/, "");
   const controle = new AbortController();
   const timer = setTimeout(() => controle.abort(), TIMEOUT_MS);
 
+  const historico = prepararMensagens(mensagens);
+  const requisicao = groq
+    ? {
+        url: `${base}/chat/completions`,
+        headers: {
+          authorization: `Bearer ${String(env.GROQ_API_KEY).trim()}`,
+          "content-type": "application/json",
+        },
+        corpo: {
+          model: env.CHAT_MODELO || MODELO_GROQ_PADRAO,
+          max_tokens: 400,
+          temperature: 0.3,
+          messages: [{ role: "system", content: montarSistema(contexto) }, ...historico],
+        },
+      }
+    : {
+        url: `${base}/v1/messages`,
+        headers: {
+          "x-api-key": String(env.ANTHROPIC_API_KEY).trim(),
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        },
+        corpo: {
+          model: env.CHAT_MODELO || MODELO_PADRAO,
+          max_tokens: 400,
+          temperature: 0.3,
+          system: montarSistema(contexto),
+          messages: historico,
+        },
+      };
+
   let resposta;
   try {
-    resposta = await fetchImpl(`${base}/v1/messages`, {
+    resposta = await fetchImpl(requisicao.url, {
       method: "POST",
-      headers: {
-        "x-api-key": String(env.ANTHROPIC_API_KEY).trim(),
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: env.CHAT_MODELO || MODELO_PADRAO,
-        max_tokens: 400,
-        system: montarSistema(contexto),
-        messages: prepararMensagens(mensagens),
-      }),
+      headers: requisicao.headers,
+      body: JSON.stringify(requisicao.corpo),
       signal: controle.signal,
     });
   } catch (erro) {
@@ -96,11 +141,13 @@ export async function responderComClaude(
     throw erroHttp(`A IA recusou a requisição: ${dados?.error?.message || resposta.status}`, 502);
   }
 
-  const texto = (dados?.content || [])
-    .filter((parte) => parte.type === "text")
-    .map((parte) => parte.text)
-    .join("")
-    .trim();
+  const texto = groq
+    ? String(dados?.choices?.[0]?.message?.content || "").trim()
+    : (dados?.content || [])
+        .filter((parte) => parte.type === "text")
+        .map((parte) => parte.text)
+        .join("")
+        .trim();
   if (!texto) throw erroHttp("A IA não devolveu resposta.", 502);
 
   const encaminhar = texto.includes(MARCADOR_WHATSAPP);

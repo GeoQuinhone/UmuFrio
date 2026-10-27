@@ -536,3 +536,53 @@
     grid-column: auto;
   }
 }
+
+/* Aviso ao cliente pelo WhatsApp depois de iniciar ou concluir */
+.whatsapp-aviso {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 10px 16px;
+  border: 1px solid;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.whatsapp-aviso span {
+  flex: 1 1 220px;
+}
+
+.whatsapp-aviso-ok {
+  border-color: #bfe3cf;
+  background: #e9f6ef;
+  color: var(--green);
+}
+
+.whatsapp-aviso-pendente {
+  border-color: #e8d9b5;
+  background: #fbf5e6;
+  color: #7a5a14;
+}
+
+.whatsapp-aviso-link {
+  padding: 7px 12px;
+  border-radius: 6px;
+  background: #1f9d55;
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.whatsapp-aviso-link:hover {
+  background: #17803f;
+}
+
+.whatsapp-aviso button {
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+}

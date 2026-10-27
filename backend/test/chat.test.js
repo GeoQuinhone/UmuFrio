@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { configChat, linkWhatsapp, mensagemWhatsapp } from "../src/chat/contexto.js";
-import { chatComIA, montarSistema, prepararMensagens, responderComClaude } from "../src/chat/claude.js";
+import { chatComIA, modoChat, montarSistema, prepararMensagens, responderComClaude } from "../src/chat/claude.js";
 import { responderDemonstracao } from "../src/chat/demo.js";
 import { criarLimite } from "../src/chat/limite.js";
 import { validarMensagens } from "../src/chat/validacao.js";
@@ -20,12 +20,12 @@ test("WhatsApp: ganha o 55 e gera o link com texto", () => {
   assert.equal(contexto.whatsapp, "5544999990000");
   assert.equal(linkWhatsapp(contexto), "https://wa.me/5544999990000");
   assert.match(linkWhatsapp(contexto, "Olá!"), /\?text=Ol%C3%A1!/);
-  // Sem CHAT_WHATSAPP, vale o número oficial (44) 9804-9224.
+  // Sem CHAT_WHATSAPP, vale o número oficial (44) 99804-9224.
   const padrao = configChat({});
-  assert.equal(padrao.whatsapp, "554498049224");
+  assert.equal(padrao.whatsapp, "5544998049224");
   assert.equal(
     linkWhatsapp(padrao, mensagemWhatsapp(padrao)),
-    "https://wa.me/554498049224?text=Ol%C3%A1!%20Vim%20pelo%20site%20da%20UmuFrio%20e%20gostaria%20de%20atendimento.",
+    "https://wa.me/5544998049224?text=Ol%C3%A1!%20Vim%20pelo%20site%20da%20UmuFrio%20e%20gostaria%20de%20atendimento.",
   );
 });
 
@@ -129,4 +129,29 @@ test("Claude: erro da API vira 502; modo IA só com chave", async () => {
   assert.equal(chatComIA({}), false);
   assert.equal(chatComIA({ ANTHROPIC_API_KEY: "sk" }), true);
   assert.equal(chatComIA({ ANTHROPIC_API_KEY: "sk", CHAT_MODO: "demonstracao" }), false);
+});
+
+test("Groq: chamada no formato OpenAI e resposta lida de choices", async () => {
+  let chamada;
+  const fetchImpl = async (url, opcoes) => {
+    chamada = { url, corpo: JSON.parse(opcoes.body), headers: opcoes.headers };
+    return { ok: true, json: async () => ({ choices: [{ message: { content: "Funcionamos de segunda a sexta. [[WHATSAPP]]" } }] }) };
+  };
+  const env = { GROQ_API_KEY: "gsk-teste", ANTHROPIC_API_KEY: "sk-outra" };
+  assert.equal(modoChat(env), "ia");
+  const r = await responderComClaude({ mensagens: [{ papel: "usuario", texto: "horário?" }], contexto }, { env, fetchImpl });
+  assert.equal(chamada.url, "https://api.groq.com/openai/v1/chat/completions");
+  assert.equal(chamada.headers.authorization, "Bearer gsk-teste");
+  assert.equal(chamada.corpo.model, "llama-3.3-70b-versatile");
+  assert.equal(chamada.corpo.messages[0].role, "system");
+  assert.equal(chamada.corpo.messages[1].role, "user");
+  assert.equal(r.encaminhar, true);
+  assert.equal(r.resposta, "Funcionamos de segunda a sexta.");
+});
+
+test("modoChat: IA só com chave; sem chave é indisponível; demonstração só se pedida", () => {
+  assert.equal(modoChat({ ANTHROPIC_API_KEY: "sk" }), "ia");
+  assert.equal(modoChat({}), "indisponivel");
+  assert.equal(modoChat({ CHAT_MODO: "demonstracao" }), "demonstracao");
+  assert.equal(modoChat({ ANTHROPIC_API_KEY: "sk", CHAT_MODO: "demonstracao" }), "demonstracao");
 });

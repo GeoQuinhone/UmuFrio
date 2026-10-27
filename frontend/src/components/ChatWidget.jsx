@@ -37,7 +37,7 @@ export default function ChatWidget() {
         setConfig(c);
         if (c.whatsappUrl) setWhatsappUrl(c.whatsappUrl);
       })
-      .catch(() => setConfig({ empresa: "UmuFrio", modo: "demonstracao" }));
+      .catch(() => setConfig({ empresa: "UmuFrio", modo: "indisponivel" }));
   }, [aberto, config]);
 
   useEffect(() => {
@@ -124,6 +124,9 @@ export default function ChatWidget() {
               <strong>Atendimento {empresa}</strong>
               {config?.modo === "demonstracao" && (
                 <span className="chat-badge">Modo demonstração</span>
+              )}
+              {config?.modo === "indisponivel" && (
+                <span className="chat-badge">Assistente indisponível</span>
               )}
             </div>
             <a

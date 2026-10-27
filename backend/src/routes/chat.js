@@ -2,7 +2,7 @@ import { Router } from "express";
 
 import { pool } from "../db/client.js";
 import { carregarContexto, configChat, linkWhatsapp, mensagemWhatsapp } from "../chat/contexto.js";
-import { chatComIA, responderComClaude } from "../chat/claude.js";
+import { MENSAGEM_INDISPONIVEL, modoChat, responderComClaude } from "../chat/claude.js";
 import { responderDemonstracao } from "../chat/demo.js";
 import { criarLimite } from "../chat/limite.js";
 import { validarMensagens } from "../chat/validacao.js";
@@ -27,7 +27,7 @@ router.get("/config", (_req, res) => {
   const config = configChat();
   res.json({
     empresa: config.empresa,
-    modo: chatComIA() ? "ia" : "demonstracao",
+    modo: modoChat(),
     whatsappUrl: linkWhatsapp(config, mensagemWhatsapp(config)),
   });
 });
@@ -51,18 +51,21 @@ router.post("/", async (req, res, next) => {
     const mensagens = validarMensagens(req.body);
     const contexto = await carregarContexto(q);
 
-    let resultado;
-    let modo = "demonstracao";
-    if (chatComIA()) {
+    let resultado = null;
+    let modo = modoChat();
+    if (modo === "ia") {
       try {
         resultado = await responderComClaude({ mensagens, contexto });
-        modo = "ia";
       } catch (erro) {
-        console.error("Chat: IA indisponível, usando respostas de demonstração:", erro.message);
+        console.error("Chat: a IA não respondeu:", erro.message);
+        modo = "indisponivel";
       }
+    } else if (modo === "demonstracao") {
+      resultado = responderDemonstracao(mensagens[mensagens.length - 1].texto, contexto);
     }
     if (!resultado) {
-      resultado = responderDemonstracao(mensagens[mensagens.length - 1].texto, contexto);
+      // Sem IA: não inventamos resposta; levamos o visitante para a equipe.
+      resultado = { resposta: MENSAGEM_INDISPONIVEL, encaminhar: true };
     }
 
     res.json({
