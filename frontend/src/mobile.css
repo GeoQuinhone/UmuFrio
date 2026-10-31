@@ -1,0 +1,333 @@
+/* ==========================================================================
+   Ajustes para celular (foco do sistema: uso em campo pelo técnico).
+   Carregado depois de styles.css. Tudo o que está em @media vale só em tela
+   pequena; o que está fora vale em qualquer tela e só corrige estouros.
+   ========================================================================== */
+
+/* --- Estouro lateral: itens escondidos com position:absolute dentro de uma
+       tabela com rolagem escapavam do recorte e alargavam a página inteira
+       (a tela inteira passava a rolar de lado e os pop-ups saíam da tela). --- */
+.schedule-table-scroll,
+.catalog-table-scroll,
+.cu-table-frame,
+.rel-table-wrap {
+  position: relative;
+  max-width: 100%;
+}
+
+.app-main,
+.app-content {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.field input,
+.field select,
+.field textarea {
+  min-width: 0;
+  max-width: 100%;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+button,
+a,
+select,
+input {
+  touch-action: manipulation;
+}
+
+@media (max-width: 760px) {
+  /* --- Barra de cima: cabe em 360 px --- */
+  .app-topbar {
+    padding-left: 10px;
+    padding-right: 10px;
+    gap: 8px;
+  }
+  .app-topbar-left {
+    min-width: 0;
+    gap: 8px;
+  }
+  .app-breadcrumb {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .app-breadcrumb > span {
+    display: none;
+  }
+  .app-user-copy {
+    display: none;
+  }
+  .app-topbar-user {
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  /* --- Alvos de toque de pelo menos 44 px --- */
+  .app-menu-toggle,
+  .app-notification-button,
+  .app-logout {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .app-nav-item {
+    min-height: 48px;
+  }
+  .schedule-icon-action,
+  .cu-icon-button,
+  .catalog-icon-button,
+  .cu-dialog-close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  button.schedule-primary-action,
+  .module-heading-action button,
+  .cu-primary-action,
+  .catalog-header-action {
+    min-height: 48px;
+  }
+
+  /* --- Campos com 16 px: o iPhone não dá zoom sozinho ao tocar --- */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+  input:not([type="checkbox"]):not([type="radio"]),
+  select {
+    min-height: 46px;
+  }
+
+  /* --- Tabelas viram cartões (um por linha) --- */
+  table.tabela-cartoes,
+  table.tabela-cartoes tbody {
+    display: block;
+    width: 100%;
+    min-width: 0 !important;
+  }
+  table.tabela-cartoes thead {
+    display: none;
+  }
+  table.tabela-cartoes tr {
+    display: block;
+    margin: 0 0 10px;
+    padding: 10px 14px;
+    border: 1px solid #d7e6e9;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(19, 60, 82, 0.05);
+  }
+  table.tabela-cartoes td {
+    position: relative;
+    display: block;
+    width: auto !important;
+    min-width: 0 !important;
+    min-height: 0;
+    padding: 6px 0 6px 38%;
+    height: auto !important;
+    line-height: 1.35;
+    border: 0 !important;
+    text-align: left !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    background: transparent !important;
+  }
+  table.tabela-cartoes td .badge,
+  table.tabela-cartoes td small {
+    margin: 1px 0;
+  }
+  table.tabela-cartoes td small {
+    display: block;
+  }
+  table.tabela-cartoes td + td {
+    border-top: 1px solid #edf3f4 !important;
+  }
+  table.tabela-cartoes td::before {
+    content: attr(data-label);
+    position: absolute;
+    left: 0;
+    top: 8px;
+    width: 34%;
+    color: #5f7a85;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  /* coluna sem título (ações): ocupa a linha toda */
+  table.tabela-cartoes td[data-label=""],
+  table.tabela-cartoes td.schedule-row-actions,
+  table.tabela-cartoes td.cu-action-cell,
+  table.tabela-cartoes td.catalog-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    height: auto;
+    padding-left: 0;
+    padding-top: 12px;
+  }
+  table.tabela-cartoes td[data-label=""]::before,
+  table.tabela-cartoes td.schedule-row-actions::before,
+  table.tabela-cartoes td.cu-action-cell::before,
+  table.tabela-cartoes td.catalog-row-actions::before {
+    display: none;
+  }
+  table.tabela-cartoes .schedule-icon-action + .schedule-icon-action {
+    margin-left: 0 !important;
+  }
+  /* Iniciar / Concluir: ação principal do técnico, primeiro e em destaque */
+  table.tabela-cartoes .schedule-icon-action[title^="Iniciar"],
+  table.tabela-cartoes .schedule-icon-action[title^="Concluir"] {
+    order: -1;
+    flex: 1 1 100%;
+    justify-content: center;
+    min-height: 52px;
+    border-color: #176b9d;
+    background: #176b9d;
+    color: #fff;
+    font-size: 16px;
+  }
+  table.tabela-cartoes .cu-row-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+  .schedule-table-scroll {
+    max-height: none;
+    overflow: visible;
+  }
+  .schedule-table-card,
+  .catalog-table-card,
+  .cu-table-frame {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* Ações do atendimento com texto (Iniciar, Concluir, Pagamento...) */
+  table.tabela-cartoes .schedule-icon-action {
+    display: inline-flex;
+    width: auto;
+    gap: 6px;
+    padding: 0 14px 0 12px;
+    align-items: center;
+    border: 1px solid #cfe1e4;
+    background: #f1f8f8;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  table.tabela-cartoes .schedule-icon-action .schedule-visually-hidden {
+    position: static;
+    width: auto;
+    height: auto;
+    clip: auto;
+    overflow: visible;
+  }
+
+  /* --- Pop-ups viram "folha" colada embaixo, com rolagem por dentro --- */
+  .cu-dialog-backdrop,
+  .catalog-dialog-backdrop {
+    padding: 0 !important;
+    align-items: end !important;
+  }
+  .cu-dialog,
+  .catalog-dialog {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 94vh !important;
+    max-height: 94dvh !important;
+    border-radius: 16px 16px 0 0 !important;
+    padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  /* Confirmações (Concluir, Cancelar...) ficam centralizadas e curtas */
+  .confirm-dialog-backdrop {
+    padding: 16px;
+  }
+  .confirm-dialog {
+    padding: 22px 18px;
+  }
+  .confirm-dialog-actions {
+    flex-direction: column-reverse;
+  }
+  .confirm-dialog-actions > * {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  /* Peças extras: campos em uma coluna que não estoura o pop-up */
+  .os-extra-parts-form {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .os-extra-parts-form > * {
+    min-width: 0;
+  }
+}
+
+/* Telefone pequeno: botões de ação de formulário em coluna */
+@media (max-width: 520px) {
+  .form-actions,
+  .cu-dialog-actions,
+  .dialog-actions {
+    flex-direction: column-reverse;
+  }
+  .form-actions > *,
+  .cu-dialog-actions > *,
+  .dialog-actions > * {
+    width: 100%;
+    min-height: 48px;
+  }
+}
+
+@media (max-width: 760px) {
+  /* Cliente/usuário: a 1ª célula (avatar + nome) é o título do cartão */
+  table.tabela-cartoes.cu-table td:first-child {
+    padding-left: 0;
+  }
+  table.tabela-cartoes.cu-table td:first-child::before {
+    display: none;
+  }
+  table.tabela-cartoes.cu-table td {
+    min-height: 34px;
+  }
+}
+
+@media (max-width: 760px) {
+  /* Demais botões, filtros e links: alvo de toque de 44 px */
+  .module-back,
+  .dashboard-text-action,
+  .schedule-close-form,
+  .cu-status-select,
+  .catalog-select,
+  .cu-filter-button,
+  .catalog-filter-button,
+  .catalog-secondary-button,
+  .rel-chip,
+  .rel-link,
+  .cu-inline-action {
+    min-height: 44px !important;
+  }
+  .schedule-close-form,
+  .cu-inline-action {
+    min-width: 44px !important;
+  }
+  .module-back,
+  .dashboard-text-action,
+  .rel-link {
+    display: inline-flex;
+    align-items: center;
+  }
+  .cu-inline-action {
+    justify-content: center;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
