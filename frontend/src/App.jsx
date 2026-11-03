@@ -13,6 +13,7 @@ import Relatorios from "./pages/Relatorios.jsx";
 import Estoque from "./pages/Estoque.jsx";
 import Usuarios from "./pages/Usuarios.jsx";
 import Servicos from "./pages/Servicos.jsx";
+import Veiculos from "./pages/Veiculos.jsx";
 import Login from "./pages/Login.jsx";
 import PrimeiroAcesso from "./pages/PrimeiroAcesso.jsx";
 import { useApiCrud } from "./hooks/useApiCrud.js";
@@ -78,6 +79,10 @@ function AppContent() {
 
   const servicos = useApiCrud("/servicos", {
     enabled: podeClientes,
+  });
+  
+  const veiculos = useApiCrud("/veiculos", {
+    enabled: podeUsuarios,
   });
 
   // Versão reduzida do estoque (sem preço de custo/estoque mínimo), usada
@@ -213,6 +218,17 @@ function AppContent() {
             <Servicos
               crud={servicos}
               estoque={estoque}
+              onBack={voltarParaInicio}
+            />,
+          )}
+        />
+        <Route
+          path="/veiculos"
+          element={protegida(
+            ["ceo"],
+            <Veiculos
+              crud={veiculos}
+              tecnicos={tecnicos}
               onBack={voltarParaInicio}
             />,
           )}

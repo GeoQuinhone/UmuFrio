@@ -276,6 +276,14 @@ export default function AtendimentoDialog({
         <dl className="cu-detail-grid">
           <div><dt>Serviço</dt><dd>{atendimento.servicoNome || "—"}</dd></div>
           <div><dt>Técnico</dt><dd>{atendimento.tecnicoNome || "—"}</dd></div>
+                    <div>
+            <dt>Veículo</dt>
+            <dd>
+              {atendimento.veiculoPlaca
+                ? `${atendimento.veiculoMarca} ${atendimento.veiculoModelo} · ${atendimento.veiculoPlaca}`
+                : "Sem veículo ativo"}
+            </dd>
+          </div>
           <div>
             <dt>Data e horário</dt>
             <dd>
