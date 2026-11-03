@@ -12,6 +12,7 @@ import pixRouter, { webhookRouter as pixWebhookRouter } from "./routes/pix.js";
 import relatoriosRouter from "./routes/relatorios.js";
 import checkinRouter from "./routes/checkin.js";
 import chatRouter from "./routes/chat.js";
+import veiculosRouter from "./routes/veiculos.js";
 
 import { requireAuth } from "./security.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
@@ -56,6 +57,7 @@ app.use("/api/ordens-servico", pixRouter);
 app.use("/api/ordens-servico", checkinRouter);
 app.use("/api/produtos", produtosRouter);
 app.use("/api/relatorios", relatoriosRouter);
+app.use("/api/veiculos", veiculosRouter);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -231,6 +231,20 @@ export const migrations = [
      CONSTRAINT ck_registros_localizacao_tipo CHECK (tipo IN ('checkin','checkout')),
      CONSTRAINT ux_registros_localizacao UNIQUE (ordem_id, tipo)
    )`,
+     // Veículos da empresa, com técnico responsável (no máximo um por técnico).
+  `CREATE TABLE IF NOT EXISTS veiculos (
+     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+     placa varchar(7) NOT NULL UNIQUE,
+     marca varchar(60) NOT NULL,
+     modelo varchar(80) NOT NULL,
+     ano integer NOT NULL,
+     tecnico_id integer REFERENCES usuarios(id) ON DELETE SET NULL,
+     status varchar(12) NOT NULL DEFAULT 'ativo',
+     criado_em timestamptz NOT NULL DEFAULT now(),
+     CONSTRAINT ck_veiculos_status CHECK (status IN ('ativo','manutencao','inativo'))
+   );
+   CREATE UNIQUE INDEX IF NOT EXISTS ux_veiculos_tecnico
+     ON veiculos (tecnico_id) WHERE tecnico_id IS NOT NULL`,
 ];
 
 export async function runMigrations(client) {

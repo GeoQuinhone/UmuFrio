@@ -7,6 +7,7 @@ import {
   usuarios,
   servicos,
   ordensServico,
+  veiculos,
 } from "../db/schema.js";
 import { roles, validId } from "../security.js";
 import { erroHttp, excluirOrdem } from "../ordemHelpers.js";
@@ -19,7 +20,9 @@ const router = Router();
 // serviço, estado da OS e informações de pagamento. A junção com a OS é
 // "left" para continuar mostrando agendamentos antigos que ainda não têm OS.
 // Também devolve os nomes prontos porque o técnico não tem acesso às listas
-// completas de clientes e serviços.
+// completas de clientes e serviços. O veículo é o que está ativo sob
+// responsabilidade do técnico (no máximo um por técnico).
+
 function selecaoUnificada() {
   return db
     .select({
@@ -40,6 +43,9 @@ function selecaoUnificada() {
       clienteCidade: clientes.cidade,
       clienteEstado: clientes.estado,
       tecnicoNome: usuarios.nome,
+      veiculoPlaca: veiculos.placa,
+      veiculoMarca: veiculos.marca,
+      veiculoModelo: veiculos.modelo,
       ordemId: ordensServico.id,
       servicoId: ordensServico.servicoId,
       servicoNome: servicos.nome,
@@ -57,6 +63,11 @@ function selecaoUnificada() {
     .from(agendamentos)
     .innerJoin(clientes, eq(agendamentos.clienteId, clientes.id))
     .innerJoin(usuarios, eq(agendamentos.tecnicoId, usuarios.id))
+    .leftJoin(veiculos, and(
+        eq(veiculos.tecnicoId, agendamentos.tecnicoId),
+        eq(veiculos.status, "ativo"),
+      ),
+    )
     .leftJoin(
       ordensServico,
       eq(ordensServico.agendamentoId, agendamentos.id),

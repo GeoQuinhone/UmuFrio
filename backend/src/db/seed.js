@@ -10,6 +10,7 @@ import {
   servicoPecas,
   servicos,
   usuarios,
+  veiculos,
 } from "./schema.js";
 import { cpfValido, hashPassword } from "../security.js";
 
@@ -313,6 +314,12 @@ async function seed() {
         }
       }
     }
+    // Frota: um veículo para cada técnico e um reserva em manutenção.
+    await tx.insert(veiculos).values([
+      { placa: "BEE4R22", marca: "Fiat", modelo: "Strada", ano: 2022, tecnicoId: idUsuario.carlos },
+      { placa: "AYK8J51", marca: "Volkswagen", modelo: "Saveiro", ano: 2021, tecnicoId: idUsuario.rafael },
+      { placa: "MFR3021", marca: "Fiat", modelo: "Fiorino", ano: 2018, status: "manutencao" },
+    ]);
 
     for (const p of Object.values(produto)) {
       await tx.update(produtos).set({ saldo: p.saldo }).where(eq(produtos.id, p.id));

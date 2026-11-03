@@ -138,6 +138,19 @@ export const movimentacoesEstoque = pgTable("movimentacoes_estoque", {
   extra: integer("extra").notNull().default(0),
 });
 
+// Frota da empresa. Cada veículo pode ter um técnico responsável (no máximo
+// um veículo por técnico); o atendimento mostra o veículo do técnico.
+export const veiculos = pgTable("veiculos", {
+  id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
+  placa: varchar("placa", { length: 7 }).notNull().unique(),
+  marca: varchar("marca", { length: 60 }).notNull(),
+  modelo: varchar("modelo", { length: 80 }).notNull(),
+  ano: integer("ano").notNull(),
+  tecnicoId: integer("tecnico_id").references(() => usuarios.id, { onDelete: "set null" }),
+  status: varchar("status", { length: 12 }).notNull().default("ativo"),
+  criadoEm: timestamp("criado_em").notNull().defaultNow(),
+});
+
 // Fase 5: check-in/check-out geolocalizado (um de cada por ordem de serviço).
 export const registrosLocalizacao = pgTable("registros_localizacao", {
   id: integer("id").generatedAlwaysAsIdentity().primaryKey(),

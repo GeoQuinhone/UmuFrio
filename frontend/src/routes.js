@@ -42,7 +42,16 @@ export const ROTAS = [
     icon: "package",
     roles: ["ceo", "estoquista"],
   },
+    {
+    // Frota da empresa, com o técnico responsável por cada veículo.
+    key: "veiculos",
+    path: "/veiculos",
+    label: "Veículos",
+    icon: "truck",
+    roles: ["ceo"],
+  },
   {
+    
     // Ponto 10: agendamento e ordem de serviço são um fluxo só, nesta tela.
     key: "agendamentos",
     path: "/agendamentos",
