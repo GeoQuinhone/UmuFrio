@@ -331,3 +331,134 @@ input {
     padding-right: 12px;
   }
 }
+
+/* --- Complementos da auditoria de usabilidade no celular --- */
+@media (max-width: 760px) {
+  /* Alvos de toque que ainda ficavam abaixo de 44 px */
+  button,
+  .auth-forgot,
+  .chat-head-whats {
+    min-height: 44px;
+  }
+  .chat-close,
+  .chat-head-whats,
+  button[aria-label="Mostrar senha"],
+  button[aria-label="Ocultar senha"] {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+  .auth-forgot,
+  .chat-foot a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .schedule-clear-filters,
+  .btn-primary {
+    min-height: 44px !important;
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 22px !important;
+    height: 22px !important;
+  }
+
+  /* Texto com no mínimo 12 px (havia textos de 8 a 11 px) */
+  .app-brand-copy small,
+  .app-brand-copy strong,
+  .dashboard-stat span,
+  .dashboard-stat small,
+  .dashboard-text-action,
+  .dashboard-appointment-copy small,
+  .dashboard-quick-copy small,
+  .cu-summary-card > span,
+  .cu-summary-card > small,
+  .catalog-stat-card span,
+  .catalog-stat-card small,
+  .orders-summary-label,
+  .orders-summary-card small,
+  .cu-primary-text,
+  .cu-secondary-text,
+  .cu-contact-subtext,
+  .cu-inline-action,
+  .cu-filter-button,
+  .catalog-filter-button,
+  .catalog-secondary-button,
+  .catalog-part-count,
+  .catalog-status-pill,
+  .catalog-primary-cell,
+  .schedule-primary-cell,
+  .schedule-secondary-cell,
+  .schedule-filter-toggle,
+  .schedule-clear-filters,
+  .badge,
+  .field-label,
+  .cu-eyebrow,
+  .catalog-eyebrow,
+  .schedule-eyebrow,
+  .service-no-parts,
+  .chat-badge,
+  .chat-foot,
+  .auth-field > span,
+  .service-parts-heading p,
+  .catalog-form-card p,
+  .schedule-filter-panel label,
+  .schedule-filter-panel label > span,
+  .module-back,
+  .module-content li span,
+  .module-content li small,
+  .module-content table th,
+  table.tabela-cartoes td small,
+  table.tabela-cartoes td::before,
+  dt,
+  dd {
+    font-size: 12px !important;
+  }
+  table.tabela-cartoes td {
+    font-size: 14px !important;
+  }
+
+  /* Agendamentos em 360 px: a grade e as abas não passam da largura */
+  .scheduling-orders-screen {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .orders-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .schedule-tabs {
+    flex-wrap: wrap;
+  }
+  .schedule-tabs > * {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* Campo de cliente do agendamento: "Novo cliente" desce para baixo */
+  .schedule-client-field {
+    flex-wrap: wrap;
+  }
+  .schedule-client-field select {
+    flex: 1 1 100%;
+  }
+  .schedule-client-new {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Cartões de resumo: texto acima da bolinha decorativa e sem corte */
+  .orders-summary-card > *,
+  .cu-summary-card > *,
+  .catalog-stat-card > *,
+  .dashboard-stat > * {
+    position: relative;
+    z-index: 1;
+  }
+  .orders-summary-card small,
+  .orders-summary-card span,
+  .cu-summary-card small,
+  .catalog-stat-card small {
+    overflow: visible !important;
+    white-space: normal !important;
+    text-overflow: clip !important;
+  }
+}
