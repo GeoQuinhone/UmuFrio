@@ -1,25 +1,32 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 
 import { useAuth } from "../AuthContext.jsx";
 import Icon from "./Icon.jsx";
+import NotificationBell from "./NotificationBell.jsx";
+import { cargoLabel } from "../utils/cargo.js";
+import { atendimentosProximos, textoFaltam } from "../utils/avisoHorario.js";
 import { ROTAS } from "../routes.js";
 
-function initials(name = "") {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
 
-export default function AppShell({ children }) {
+export default function AppShell({ children, agendamentos = [] }) {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
+  const [dispensados, setDispensados] = useState([]);
+  const [agora, setAgora] = useState(() => new Date());
+
+  useEffect(() => {
+    if (user?.perfil !== "tecnico") return undefined;
+    const id = setInterval(() => setAgora(new Date()), 30000);
+    return () => clearInterval(id);
+  }, [user?.perfil]);
+
+  // Fase 8: faixa de aviso quando um atendimento do técnico está perto do horário.
+  const avisosHorario =
+    user?.perfil === "tecnico"
+      ? atendimentosProximos(agendamentos, user.id, agora).filter((a) => !dispensados.includes(a.id))
+      : [];
   const activeItem = ROTAS.find((item) =>
     item.path === "/"
       ? pathname === "/"
@@ -101,29 +108,11 @@ export default function AppShell({ children }) {
           </div>
 
           <div className="app-topbar-user">
-            <div className="app-notification-wrap">
-              <button
-                type="button"
-                className="app-notification-button"
-                aria-label="Notificações"
-                aria-expanded={showNotifications}
-                onClick={() => setShowNotifications((shown) => !shown)}
-              >
-                <Icon name="bell" size={18} />
-              </button>
-              {showNotifications && (
-                <div className="app-notification-popover" role="status">
-                  Sem notificações no momento.
-                </div>
-              )}
+            <NotificationBell perfil={user?.perfil} usuarioId={user?.id} agendamentos={agendamentos} />
+            <div className="app-user-copy app-user-cargo" title={user?.nome}>
+              <span className={`app-cargo-chip cargo-${user?.perfil || "x"}`}>{cargoLabel(user?.perfil)}</span>
+              <small>Sessão ativa</small>
             </div>
-            <div className="app-user-copy">
-              <span>Olá,</span>
-              <strong>{user?.nome?.trim().split(/\s+/)[0] || "Usuário"}</strong>
-            </div>
-            <span className="app-user-avatar" aria-hidden="true">
-              {initials(user?.nome) || "UF"}
-            </span>
             <button
               type="button"
               className="app-logout"
@@ -134,6 +123,28 @@ export default function AppShell({ children }) {
             </button>
           </div>
         </header>
+
+        {avisosHorario.length > 0 && (
+          <div className="aviso-horario" role="alert">
+            {avisosHorario.slice(0, 2).map((a) => (
+              <div key={a.id} className="aviso-horario-item">
+                <Icon name="clock" size={17} />
+                <span>
+                  <strong>{String(a.hora).slice(0, 5)} · {a.clienteNome}</strong> — {textoFaltam(a.minutos)}.
+                </span>
+                <NavLink to="/agendamentos" className="aviso-horario-link">Ver agenda</NavLink>
+                <button
+                  type="button"
+                  aria-label="Dispensar aviso"
+                  className="aviso-horario-fechar"
+                  onClick={() => setDispensados((lista) => [...lista, a.id])}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         <main className="app-content">{children}</main>
       </div>

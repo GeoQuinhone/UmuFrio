@@ -284,6 +284,9 @@ export default function Login() {
               {loading ? "Entrando..." : "Entrar no painel"}
             </button>
           </form>
+          <p className="auth-about-link">
+            <a href="/">Conheça a UmuFrio: missão, visão e valores</a>
+          </p>
           <div className="auth-whatsapp">
             <span>Precisa de ajuda ou quer contratar um serviço?</span>
             <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">

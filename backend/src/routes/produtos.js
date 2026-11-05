@@ -2,7 +2,7 @@ import { Router } from "express";
 import {
   and,
   eq,
-  lt,
+  lte,
   sql,
 } from "drizzle-orm";
 import { db } from "../db/client.js";
@@ -14,6 +14,7 @@ import {
   roles,
   validId,
 } from "../security.js";
+import { avisarEstoque } from "../notificacoes.js";
 
 const router = Router();
 
@@ -48,16 +49,26 @@ router.get(
 router.get(
   "/para-tecnico",
   roles("ceo", "atendente", "estoquista", "tecnico"),
-  async (_req, res, next) => {
+  async (req, res, next) => {
     try {
       const rows = await db
         .select({
           id: produtos.id,
           nome: produtos.nome,
           saldo: produtos.saldo,
+          quantidadeMinima: produtos.quantidadeMinima,
+          valorUnitario: produtos.valorUnitario,
         })
         .from(produtos)
         .orderBy(produtos.nome);
+
+      // O técnico precisa do preço (a peça extra é cobrada do cliente), mas
+      // não do estoque mínimo, que é informação de gestão.
+      if (req.usuario.perfil === "tecnico") {
+        return res.json(
+          rows.map(({ quantidadeMinima: _minimo, ...resto }) => resto),
+        );
+      }
 
       res.json(rows);
     } catch (error) {
@@ -75,7 +86,7 @@ router.get(
         .select()
         .from(produtos)
         .where(
-          lt(
+          lte(
             produtos.saldo,
             produtos.quantidadeMinima,
           ),
@@ -273,6 +284,7 @@ async function movimentarEstoque(
             usuarioId: req.usuario.id,
             tipo,
             quantidade,
+            valorUnitario: atualizado.valorUnitario,
           });
 
         return {
@@ -286,6 +298,8 @@ async function movimentarEstoque(
         error: "Produto não encontrado.",
       });
     }
+
+    if (tipo === "saida") await avisarEstoque(resultado.produto);
 
     res.json(resultado.produto);
   } catch (error) {

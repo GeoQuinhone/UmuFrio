@@ -55,3 +55,19 @@ export async function excluirOrdem(tx, ordemId) {
 
   return ordem;
 }
+
+
+// Fase 8: soma do valor das peças extras (quantidade x valor unitário gravado
+// na movimentação; se faltar, o valor atual do produto) de uma ordem. É
+// cobrada do cliente junto com o valor do serviço.
+export function sqlValorExtras(ordemIdRef) {
+  return sql`(SELECT COALESCE(SUM(m.quantidade * COALESCE(m.valor_unitario, p.valor_unitario)), 0)
+      FROM movimentacoes_estoque m JOIN produtos p ON p.id = m.produto_id
+      WHERE m.ordem_servico_id = ${ordemIdRef} AND m.extra = 1)`;
+}
+
+export async function valorExtrasDaOrdem(executor, ordemId) {
+  const resultado = await executor.execute(sql`SELECT ${sqlValorExtras(sql`${ordemId}::int`)} AS total`);
+  const linha = (resultado.rows ?? resultado)[0];
+  return Number(linha?.total ?? 0);
+}

@@ -10,7 +10,8 @@ import {
   veiculos,
 } from "../db/schema.js";
 import { roles, validId } from "../security.js";
-import { erroHttp, excluirOrdem } from "../ordemHelpers.js";
+import { erroHttp, excluirOrdem, sqlValorExtras } from "../ordemHelpers.js";
+import { notificar } from "../notificacoes.js";
 
 const router = Router();
 
@@ -50,6 +51,7 @@ function selecaoUnificada() {
       servicoId: ordensServico.servicoId,
       servicoNome: servicos.nome,
       servicoValor: servicos.valor,
+      extrasValor: sqlValorExtras(ordensServico.id),
       ordemStatus: ordensServico.status,
       abertaEm: ordensServico.abertaEm,
       iniciadaEm: ordensServico.iniciadaEm,
@@ -86,12 +88,15 @@ function horarioMuitoProximo(horaA, horaB) {
   return Math.abs(minutosDoDia(horaA) - minutosDoDia(horaB)) < 60;
 }
 
-// Data de hoje no fuso do servidor (YYYY-MM-DD). Não usa toISOString porque
-// ele devolve a data em UTC, que à noite já é "amanhã" no horário do Brasil.
+// Data de hoje no fuso de Brasília (YYYY-MM-DD), independente do fuso do
+// servidor: o Render roda em UTC e, depois das 21h, a data UTC já é "amanhã".
 function dataDeHoje() {
-  const agora = new Date();
-  const dois = (n) => String(n).padStart(2, "0");
-  return `${agora.getFullYear()}-${dois(agora.getMonth() + 1)}-${dois(agora.getDate())}`;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: process.env.RELATORIOS_FUSO || "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 }
 
 // Valida os dados de um atendimento (agendamento + serviço). Em uma edição,
@@ -419,7 +424,22 @@ async function encerrarSemRealizar(req, res, next, { naoRealizado }) {
         .where(eq(agendamentos.id, id));
     });
 
-    res.json(await buscarUnificado(id));
+    const resultado = await buscarUnificado(id);
+
+    // Fase 8: avisa o CEO (quem cancelou, quem registrou o não realizado).
+    if (resultado) {
+      await notificar({
+        tipo: naoRealizado ? "nao_realizado" : "cancelado",
+        agendamentoId: id,
+        titulo: naoRealizado ? "Atendimento não realizado" : "Atendimento cancelado",
+        mensagem:
+          `${resultado.clienteNome} – ${resultado.data}` +
+          `${resultado.hora ? ` ${String(resultado.hora).slice(0, 5)}` : ""}` +
+          `${naoRealizado ? `: ${motivo}` : "."}`,
+      });
+    }
+
+    res.json(resultado);
   } catch (error) {
     next(error);
   }

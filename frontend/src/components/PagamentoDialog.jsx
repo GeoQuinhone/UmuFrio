@@ -36,10 +36,12 @@ export default function PagamentoDialog({
   const [pixAprovado, setPixAprovado] = useState(false);
   const confirmadoAntes = Boolean(atendimento.pagamentoConfirmado) || pixAprovado;
   const somenteLeitura = confirmadoAntes && perfil !== "ceo";
-  const valorServico = Number(atendimento.servicoValor ?? 0);
+  // Fase 8: o valor esperado é o serviço + as peças extras usadas.
+  const valorExtras = Number(atendimento.extrasValor ?? 0);
+  const valorServico = Number(atendimento.servicoValor ?? 0) + valorExtras;
 
   const [valor, setValor] = useState(
-    paraCampoMoeda(atendimento.valorCobrado ?? atendimento.servicoValor),
+    paraCampoMoeda(atendimento.valorCobrado ?? valorServico),
   );
   const [forma, setForma] = useState(atendimento.formaPagamento || "");
   const [confirmado, setConfirmado] = useState(confirmadoAntes);
@@ -169,6 +171,12 @@ export default function PagamentoDialog({
           <p className="payment-reference">
             {atendimento.servicoNome} · valor do serviço{" "}
             <strong>{formatMoeda(atendimento.servicoValor)}</strong>
+            {valorExtras > 0 && (
+              <>
+                {" "}+ peças extras <strong>{formatMoeda(valorExtras)}</strong>
+                {" "}= <strong>{formatMoeda(valorServico)}</strong>
+              </>
+            )}
           </p>
 
           {somenteLeitura && (
@@ -194,8 +202,8 @@ export default function PagamentoDialog({
               hint={
                 valorDiferente
                   ? diferenca > 0
-                    ? `${formatMoeda(diferenca / 100)} acima do valor do serviço.`
-                    : `${formatMoeda(Math.abs(diferenca) / 100)} abaixo do valor do serviço.`
+                    ? `${formatMoeda(diferenca / 100)} acima do valor esperado.`
+                    : `${formatMoeda(Math.abs(diferenca) / 100)} abaixo do valor esperado.`
                   : undefined
               }
             >

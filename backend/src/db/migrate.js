@@ -245,6 +245,37 @@ export const migrations = [
    );
    CREATE UNIQUE INDEX IF NOT EXISTS ux_veiculos_tecnico
      ON veiculos (tecnico_id) WHERE tecnico_id IS NOT NULL`,
+  // Fase 8: CPF ou CNPJ no cliente, valor unitário gravado na movimentação,
+  // despesas e notificações (as colunas de data já são timestamptz no banco).
+  `ALTER TABLE clientes ALTER COLUMN cpf TYPE varchar(18);
+   ALTER TABLE clientes ADD COLUMN IF NOT EXISTS tipo_pessoa varchar(2) NOT NULL DEFAULT 'PF';
+   UPDATE clientes SET tipo_pessoa = CASE WHEN length(regexp_replace(cpf, '\\D', '', 'g')) = 14 THEN 'PJ' ELSE 'PF' END;
+   ALTER TABLE movimentacoes_estoque ADD COLUMN IF NOT EXISTS valor_unitario numeric(10,2);
+   UPDATE movimentacoes_estoque m SET valor_unitario = p.valor_unitario
+     FROM produtos p WHERE p.id = m.produto_id AND m.valor_unitario IS NULL;
+   CREATE TABLE IF NOT EXISTS despesas (
+     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+     descricao varchar(150) NOT NULL,
+     categoria varchar(30) NOT NULL,
+     valor numeric(10,2) NOT NULL CHECK (valor > 0),
+     data date NOT NULL,
+     observacao varchar(255),
+     usuario_id integer REFERENCES usuarios(id) ON DELETE SET NULL,
+     criado_em timestamptz NOT NULL DEFAULT now()
+   );
+   CREATE INDEX IF NOT EXISTS ix_despesas_data ON despesas (data);
+   CREATE TABLE IF NOT EXISTS notificacoes (
+     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+     tipo varchar(24) NOT NULL,
+     titulo varchar(120) NOT NULL,
+     mensagem varchar(300) NOT NULL,
+     agendamento_id integer,
+     ordem_id integer,
+     produto_id integer,
+     criada_em timestamptz NOT NULL DEFAULT now(),
+     lida_em timestamptz
+   );
+   CREATE INDEX IF NOT EXISTS ix_notificacoes_criada ON notificacoes (criada_em DESC)`,
 ];
 
 export async function runMigrations(client) {

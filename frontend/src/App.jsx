@@ -3,6 +3,7 @@ import {
   Navigate,
   Route,
   Routes,
+  useLocation,
   useNavigate,
 } from "react-router-dom";
 import AppShell from "./components/AppShell.jsx";
@@ -14,7 +15,9 @@ import Estoque from "./pages/Estoque.jsx";
 import Usuarios from "./pages/Usuarios.jsx";
 import Servicos from "./pages/Servicos.jsx";
 import Veiculos from "./pages/Veiculos.jsx";
+import Despesas from "./pages/Despesas.jsx";
 import Login from "./pages/Login.jsx";
+import Institucional from "./pages/Institucional.jsx";
 import PrimeiroAcesso from "./pages/PrimeiroAcesso.jsx";
 import { useApiCrud } from "./hooks/useApiCrud.js";
 import { caminhoDaChave } from "./routes.js";
@@ -26,6 +29,7 @@ import {
 function AppContent() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   const podeClientes =
     user?.perfil === "ceo" ||
@@ -92,6 +96,11 @@ function AppContent() {
     enabled: podeAgenda,
   });
 
+  // Fase 8: página institucional pública (visão, missão, valores e fale conosco).
+  if (pathname === "/sobre") {
+    return <Institucional />;
+  }
+
   if (loading) {
     return (
       <div className="layout">
@@ -100,8 +109,10 @@ function AppContent() {
     );
   }
 
+  // Sem sessão, a porta de entrada é a página institucional (“Quem somos”);
+  // o login fica em /login (botão “Área da equipe”).
   if (!user) {
-    return <Login />;
+    return pathname === "/login" ? <Login /> : <Institucional />;
   }
 
   if (user.primeiroAcesso) {
@@ -136,7 +147,7 @@ function AppContent() {
   }
 
   return (
-    <AppShell>
+    <AppShell agendamentos={agendamentos.items}>
       <Routes>
         <Route
           path="/"
@@ -232,6 +243,11 @@ function AppContent() {
               onBack={voltarParaInicio}
             />,
           )}
+        />
+
+        <Route
+          path="/despesas"
+          element={protegida(["ceo"], <Despesas onBack={voltarParaInicio} />)}
         />
 
         <Route

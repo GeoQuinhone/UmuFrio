@@ -15,6 +15,9 @@ if (!process.env.DATABASE_URL) {
 export const pool = new Pool ({
  connectionString: process.env.DATABASE_URL,
  max: 10,
+ // Fase 8: força a sessão em UTC. Sem isso, um Postgres local com fuso -03
+ // devolvia datas como "...-03" e o drizzle as lia 3h deslocadas.
+ options: "-c timezone=UTC",
 });
 
 export const db = drizzle(pool, {schema});

@@ -1,4 +1,5 @@
 import { PAGINA, PdfDoc } from "./pdfDoc.js";
+import { categoriaLabel } from "./despesas.js";
 import { formaPagamentoLabel, formatMoeda } from "./atendimento.js";
 
 // Fase 6 — monta o PDF dos relatórios a partir dos mesmos dados que a tela
@@ -225,11 +226,31 @@ class Fluxo {
 
 function painelFaturamento(f, dados) {
   const t = dados.faturamento;
+  const variacao = t.anterior?.variacaoPercentual;
   f.cartoes([
-    { rotulo: "Faturamento", valor: moeda(t.total), detalhe: `${numero(t.quantidade)} pagamento(s)` },
+    {
+      rotulo: "Faturamento",
+      valor: moeda(t.total),
+      detalhe: `${numero(t.quantidade)} pagamento(s)${variacao === null || variacao === undefined ? "" : ` · ${variacao > 0 ? "+" : ""}${percentual(variacao)} vs. anterior`}`,
+    },
+    { rotulo: "Gastos", valor: moeda(t.gastos?.total), detalhe: `Pecas ${moeda(t.gastos?.pecas)} · despesas ${moeda(t.gastos?.despesas)}` },
+    { rotulo: "Lucro", valor: moeda(t.lucro), detalhe: t.margemPercentual === null || t.margemPercentual === undefined ? "sem faturamento" : `margem de ${percentual(t.margemPercentual)}` },
+  ]);
+  f.cartoes([
     { rotulo: "Ticket médio", valor: moeda(t.ticketMedio), detalhe: "por pagamento confirmado" },
     { rotulo: "A receber", valor: moeda(t.aReceber.total), detalhe: `${numero(t.aReceber.quantidade)} atendimento(s) em aberto` },
   ]);
+  if (t.gastos?.porCategoria?.length) {
+    f.titulo2("Despesas por categoria");
+    f.barrasH(
+      t.gastos.porCategoria.map((c) => ({
+        rotulo: categoriaLabel(c.categoria),
+        valor: Number(c.total),
+        texto: moeda(c.total),
+        detalhe: `${numero(c.quantidade)} lancamento(s)`,
+      })),
+    );
+  }
   f.titulo2(`Faturamento por ${t.agrupamento === "mes" ? "mês" : "dia"}`);
   if (!t.porPeriodo.length) f.vazio("Nenhum pagamento confirmado neste período.");
   else {
@@ -256,6 +277,38 @@ function painelFaturamento(f, dados) {
         detalhe: `${numero(i.quantidade)} pagamento(s)`,
       })),
     );
+
+  const LIMITE = 30;
+  f.titulo2(`Quem falta pagar (${numero(t.aReceber.quantidade)})`);
+  if (!t.pendentes?.length) f.vazio("Nenhum pagamento pendente.");
+  else {
+    f.tabela(
+      [
+        { titulo: "Atendimento", peso: 3 },
+        { titulo: "Cliente", peso: 4 },
+        { titulo: "Serviço", peso: 4 },
+        { titulo: "Em aberto", peso: 2, alinhar: "direita" },
+        { titulo: "Valor", peso: 3, alinhar: "direita" },
+      ],
+      t.pendentes.slice(0, LIMITE).map((l) => [`${dataBr(l.data)} ${l.hora}`, l.cliente, l.servico, `${l.diasEmAberto} d`, moeda(l.valor)]),
+    );
+    if (t.pendentes.length > LIMITE) f.paragrafo(`Mostrando ${LIMITE} de ${numero(t.aReceber.quantidade)}. A lista completa está no CSV.`, { tamanho: 8, cor: COR.suave });
+  }
+
+  f.titulo2(`Quem já pagou (${numero(t.quantidade)})`);
+  if (!t.pagos?.length) f.vazio("Nenhum pagamento confirmado neste período.");
+  else {
+    f.tabela(
+      [
+        { titulo: "Cliente", peso: 4 },
+        { titulo: "Serviço", peso: 4 },
+        { titulo: "Forma", peso: 3 },
+        { titulo: "Valor", peso: 3, alinhar: "direita" },
+      ],
+      t.pagos.slice(0, LIMITE).map((l) => [l.cliente, l.servico, formaPagamentoLabel(l.forma), moeda(l.valor)]),
+    );
+    if (t.pagos.length > LIMITE) f.paragrafo(`Mostrando ${LIMITE} de ${numero(t.quantidade)}. A lista completa está no CSV.`, { tamanho: 8, cor: COR.suave });
+  }
 }
 
 function painelServicos(f, dados) {
@@ -273,7 +326,7 @@ function painelServicos(f, dados) {
         rotulo: i.nome,
         valor: Number(i.quantidade),
         texto: `${numero(i.quantidade)}×`,
-        detalhe: `Receita ${moeda(i.receita)} · recebido ${moeda(i.recebido)}`,
+        detalhe: `Receita ${moeda(i.receita)} (${percentual(i.participacao)}) · ticket ${moeda(i.ticketMedio)} · recebido ${moeda(i.recebido)}`,
       })),
     );
   f.titulo2("Desempenho dos técnicos");
@@ -282,12 +335,14 @@ function painelServicos(f, dados) {
     f.tabela(
       [
         { titulo: "Técnico", peso: 4 },
-        { titulo: "Concluídos", peso: 2, alinhar: "direita" },
+        { titulo: "Concl.", peso: 2, alinhar: "direita" },
         { titulo: "Receita", peso: 3, alinhar: "direita" },
-        { titulo: "Não realizados", peso: 3, alinhar: "direita" },
-        { titulo: "Tempo médio", peso: 3, alinhar: "direita" },
+        { titulo: "Ticket", peso: 3, alinhar: "direita" },
+        { titulo: "Não real.", peso: 2, alinhar: "direita" },
+        { titulo: "Taxa", peso: 2, alinhar: "direita" },
+        { titulo: "Tempo", peso: 3, alinhar: "direita" },
       ],
-      s.tecnicos.map((t) => [t.nome, numero(t.concluidos), moeda(t.receita), numero(t.naoRealizados), duracao(t.tempoMedioMin)]),
+      s.tecnicos.map((t) => [t.nome, numero(t.concluidos), moeda(t.receita), moeda(t.ticketMedio), numero(t.naoRealizados), percentual(t.taxaConclusao), duracao(t.tempoMedioMin)]),
     );
 }
 
@@ -295,11 +350,14 @@ function painelEstoque(f, dados) {
   const e = dados.estoque;
   f.cartoes([
     { rotulo: "Unidades consumidas", valor: numero(e.unidadesConsumidas), detalhe: `${numero(e.unidadesExtras)} como peças extras` },
-    { rotulo: "Custo das peças", valor: moeda(e.custoPecas), detalhe: "a preço unitário atual" },
-    { rotulo: "Entradas no período", valor: numero(e.entradas), detalhe: "unidades recebidas" },
+    { rotulo: "Custo das peças", valor: moeda(e.custoPecas), detalhe: "consumo do período" },
+    { rotulo: "Entradas no período", valor: numero(e.entradas), detalhe: `${moeda(e.valorEntradas)} em compras` },
+  ]);
+  f.cartoes([
+    { rotulo: "Valor em estoque", valor: moeda(e.valorEmEstoque), detalhe: `${numero(e.produtos)} produto(s) · ${numero(e.zerados)} zerado(s)` },
   ]);
   if (e.abaixoMinimo.length) {
-    f.titulo2(`Abaixo do estoque mínimo (${e.abaixoMinimo.length})`);
+    f.titulo2(`No estoque mínimo ou abaixo (${e.abaixoMinimo.length})`);
     f.tabela(
       [
         { titulo: "Produto", peso: 5 },

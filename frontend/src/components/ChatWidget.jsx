@@ -40,6 +40,13 @@ export default function ChatWidget() {
       .catch(() => setConfig({ empresa: "UmuFrio", modo: "indisponivel" }));
   }, [aberto, config]);
 
+  // Botões da página institucional abrem o assistente por este evento.
+  useEffect(() => {
+    const abrir = () => setAberto(true);
+    window.addEventListener("umufrio:abrir-chat", abrir);
+    return () => window.removeEventListener("umufrio:abrir-chat", abrir);
+  }, []);
+
   useEffect(() => {
     if (aberto) campoRef.current?.focus();
   }, [aberto]);

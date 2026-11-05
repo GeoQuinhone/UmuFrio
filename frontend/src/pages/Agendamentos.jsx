@@ -15,6 +15,8 @@ import {
   estadoDoAtendimento,
   formatDate,
   formatMoeda,
+  linkLigacao,
+  linkWhatsappCliente,
   osCode,
   pagamentoConfirmado,
   podeRegistrarPagamento,
@@ -82,6 +84,7 @@ function AvisoWhatsApp({ aviso, onClose }) {
 
 
 function abaDoAtendimento(atendimento) {
+  if (atendimento.naoRealizado) return "nao_realizados";
   if (atendimento.status === "cancelado") return "cancelados";
   if (atendimento.ordemStatus === "concluida") return "concluidos";
   return "ativos";
@@ -149,7 +152,11 @@ export default function Agendamentos({
   const [showFilters, setShowFilters] = useState(false);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [aba, setAba] = useState("ativos");
+  // Fase 8: ?aba=nao_realizados abre direto a aba (usado pelos relatórios).
+  const abaInicial = new URLSearchParams(location.search).get("aba");
+  const [aba, setAba] = useState(
+    ["ativos", "concluidos", "cancelados", "nao_realizados"].includes(abaInicial) ? abaInicial : "ativos",
+  );
 
   const clientItems = clientes?.items || [];
   const technicianItems = tecnicos?.items || [];
@@ -417,6 +424,7 @@ export default function Agendamentos({
     ativos: items.filter((a) => abaDoAtendimento(a) === "ativos"),
     concluidos: items.filter((a) => abaDoAtendimento(a) === "concluidos"),
     cancelados: items.filter((a) => abaDoAtendimento(a) === "cancelados"),
+    nao_realizados: items.filter((a) => abaDoAtendimento(a) === "nao_realizados"),
   };
 
   const estadosDaAba = [];
@@ -528,6 +536,7 @@ export default function Agendamentos({
     { key: "ativos", label: `Ativos (${porAba.ativos.length})` },
     { key: "concluidos", label: `Concluídos (${porAba.concluidos.length})` },
     { key: "cancelados", label: `Cancelados (${porAba.cancelados.length})` },
+    { key: "nao_realizados", label: `Não realizados (${porAba.nao_realizados.length})` },
   ];
 
   return (
@@ -768,7 +777,32 @@ export default function Agendamentos({
                         <td className="schedule-time-cell">
                           {atendimento.hora?.slice(0, 5) || "—"}
                         </td>
-                        <td className="schedule-strong-cell">{atendimento.clienteNome}</td>
+                        <td className="schedule-strong-cell">
+                          {atendimento.clienteNome}
+                          {atendimento.status === "agendado" && atendimento.clienteTelefone && (
+                            <small className="schedule-secondary-cell schedule-contact">
+                              {linkLigacao(atendimento.clienteTelefone) ? (
+                                <a href={linkLigacao(atendimento.clienteTelefone)} title="Ligar para o cliente">
+                                  {atendimento.clienteTelefone}
+                                </a>
+                              ) : (
+                                atendimento.clienteTelefone
+                              )}
+                              {linkWhatsappCliente(atendimento, user?.nome) && (
+                                <a
+                                  className="schedule-whats-link"
+                                  href={linkWhatsappCliente(atendimento, user?.nome)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  aria-label={`Chamar ${atendimento.clienteNome} no WhatsApp`}
+                                  title="Chamar no WhatsApp"
+                                >
+                                  <Icon name="whatsapp" size={13} />
+                                </a>
+                              )}
+                            </small>
+                          )}
+                        </td>
                         <td>
                           {atendimento.servicoNome || "—"}
                           {atendimento.ordemId && (

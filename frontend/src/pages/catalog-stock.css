@@ -734,3 +734,7 @@
     grid-template-columns: 1fr;
   }
 }
+/* Fase 8: resumo da movimentação de estoque */
+.stock-movement-info { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px; padding: 10px 14px; border: 1px solid var(--uf-line, #dfe7ec); border-radius: 10px; background: #f6fafb; font-size: 12px; color: #536772; }
+.stock-movement-info strong { color: var(--uf-navy, #12325b); }
+.stock-movement-info .is-alerta { color: #a15b00; }

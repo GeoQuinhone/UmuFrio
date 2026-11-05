@@ -357,3 +357,37 @@
     grid-template-columns: 10px 100px minmax(0, 1fr) 32px;
   }
 }
+
+/* ===== Fase 8: lucro, listas e drill-down ===== */
+.rel-lucro { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+.rel-lucro > div { display: grid; gap: 2px; padding: 12px 14px; border: 1px solid var(--uf-line, #dfe7ec); border-radius: 10px; background: #f8fbfc; }
+.rel-lucro span { font-size: 11px; color: #6b7f8c; font-weight: 700; }
+.rel-lucro strong { font-size: 17px; color: #12325b; }
+.rel-lucro .is-menos strong { color: #a15b00; }
+.rel-lucro .is-total { background: #e9f6f0; border-color: #bfe5d2; }
+.rel-lucro .is-total strong { color: #1b7a47; }
+.rel-lucro .is-total.is-negativo { background: #fdecec; border-color: #f2c4c4; }
+.rel-lucro .is-total.is-negativo strong { color: #a12a2a; }
+@media (max-width: 760px) { .rel-lucro { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.rel-drill-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.rel-drill-head h3 { margin: 0; }
+.rel-drill-actions { display: flex; gap: 14px; }
+.rel-drill { border-color: #b9d6e3; }
+.rel-segment { display: inline-flex; border: 1px solid var(--uf-line, #dfe7ec); border-radius: 999px; overflow: hidden; background: #fff; }
+.rel-segment button { border: 0; background: transparent; box-shadow: none; padding: 7px 14px; font-size: 12px; font-weight: 700; color: #536772; cursor: pointer; }
+.rel-segment button.is-active { background: #12325b; color: #fff; }
+.rel-hint { margin: 10px 0 0; color: #6b7f8c; font-size: 12px; }
+.rel-tag { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; white-space: nowrap; }
+.rel-tag-ok { background: #e3f6ec; color: #1b7a47; }
+.rel-tag-info { background: #e5f0fb; color: #1f5f9c; }
+.rel-tag-neutro { background: #eef1f3; color: #536772; }
+.rel-tag-aviso { background: #fff3d6; color: #8a5a00; }
+.rel-tag-erro { background: #fdecec; color: #a12a2a; }
+.rel-tag-inline { margin-left: 8px; font-style: normal; }
+.rel-motivo { display: block; margin-top: 3px; color: #6b7f8c; font-size: 11px; white-space: normal; }
+.rel-status-button { border: 0; background: transparent; box-shadow: none; padding: 0; text-align: left; color: inherit; font: inherit; cursor: pointer; text-decoration: underline dotted #9fb3bf; text-underline-offset: 3px; }
+.rel-status-button:disabled { cursor: default; text-decoration: none; opacity: .75; }
+.rel-status-button:not(:disabled):hover { color: #176b9d; }
+.rel-chips-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.rel-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

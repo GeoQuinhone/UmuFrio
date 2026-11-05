@@ -10,6 +10,8 @@ import {
 } from "../components/FormControls.jsx";
 import { apiRequest } from "../api.js";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
+import { useAuth } from "../AuthContext.jsx";
+import ProdutoSelect from "../components/ProdutoSelect.jsx";
 import { mascaraMoeda, moedaParaNumero } from "../utils/mascaras.js";
 import "./catalog-stock.css";
 
@@ -130,6 +132,9 @@ function useDialogFocus(isOpen, onClose) {
 }
 
 export default function Servicos({ crud, estoque, onBack }) {
+  // Fase 8: só o CEO cria/edita serviços, preços e peças (o atendente consulta).
+  const { user } = useAuth();
+  const podeEditar = user?.perfil === "ceo";
   const { items, loading, error, add, remove, action, reload } = crud;
   const { confirm, confirmElement } = useConfirm();
   const servicos = Array.isArray(items) ? items : [];
@@ -361,14 +366,16 @@ export default function Servicos({ crud, estoque, onBack }) {
       subtitle="Preços e descrições que sua equipe usa no orçamento."
       onBack={onBack}
       action={
-        <button
-          type="button"
-          className="catalog-header-action"
-          onClick={startNew}
-        >
-          <Icon name="plus" size={16} />
-          Novo serviço
-        </button>
+        podeEditar ? (
+          <button
+            type="button"
+            className="catalog-header-action"
+            onClick={startNew}
+          >
+            <Icon name="plus" size={16} />
+            Novo serviço
+          </button>
+        ) : null
       }
     >
       <div className="catalog-page-content catalog-services-page">
@@ -472,24 +479,12 @@ export default function Servicos({ crud, estoque, onBack }) {
                   {form.pecas.map((piece, index) => (
                     <div className="service-part-row" key={index}>
                       <Field label={`Peça ${index + 1}`}>
-                        <select
-                          className="input"
+                        <ProdutoSelect
+                          produtos={produtos}
                           value={piece.produtoId}
-                          onChange={(event) =>
-                            updatePeca(
-                              index,
-                              "produtoId",
-                              event.target.value,
-                            )
-                          }
-                        >
-                          <option value="">Selecione um produto...</option>
-                          {produtos.map((produto) => (
-                            <option key={produto.id} value={produto.id}>
-                              {produto.nome}
-                            </option>
-                          ))}
-                        </select>
+                          mostrarMinimo={false}
+                          onChange={(id) => updatePeca(index, "produtoId", id)}
+                        />
                       </Field>
                       <Field label="Quantidade">
                         <input
@@ -667,6 +662,8 @@ export default function Servicos({ crud, estoque, onBack }) {
                           >
                             <Icon name="eye" size={16} />
                           </button>
+                          {podeEditar && (
+                            <>
                           <button
                             type="button"
                             className="catalog-icon-button"
@@ -694,6 +691,8 @@ export default function Servicos({ crud, estoque, onBack }) {
                           >
                             <Icon name="trash" size={16} />
                           </button>
+                            </>
+                          )}
                         </td>
                       </tr>
                     );
@@ -764,6 +763,7 @@ export default function Servicos({ crud, estoque, onBack }) {
               >
                 Fechar
               </button>
+              {podeEditar && (
               <button
                 type="button"
                 className="catalog-header-action"
@@ -775,6 +775,7 @@ export default function Servicos({ crud, estoque, onBack }) {
                 <Icon name="pencil" size={15} />
                 Editar serviço
               </button>
+              )}
             </div>
           </section>
         </div>

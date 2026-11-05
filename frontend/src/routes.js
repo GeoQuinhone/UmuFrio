@@ -60,6 +60,14 @@ export const ROTAS = [
     roles: ["ceo", "atendente", "tecnico"],
   },
   {
+    // Fase 8: controle de gastos (alimenta o lucro dos relatórios), só o CEO.
+    key: "despesas",
+    path: "/despesas",
+    label: "Despesas",
+    icon: "wallet",
+    roles: ["ceo"],
+  },
+  {
     // Fase 4: relatórios estratégicos, somente o CEO.
     key: "relatorios",
     path: "/relatorios",

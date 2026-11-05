@@ -388,3 +388,7 @@
 .auth-whatsapp a:hover {
   background: #188f48;
 }
+
+.auth-about-link { margin: 14px 0 0; text-align: center; font-size: 13px; }
+.auth-about-link a { color: #176b9d; font-weight: 700; text-decoration: none; }
+.auth-about-link a:hover { text-decoration: underline; }

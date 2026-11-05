@@ -13,6 +13,7 @@
     "db:migrate": "node src/db/migrate.js",
     "db:seed": "node src/db/seed.js",
     "db:seed-teste": "node src/db/seed-teste.js",
+    "db:seed-ano": "node src/db/seed-ano.js",
     "db:push": "drizzle-kit push --config=drizzle.config.cjs",
     "db:studio": "drizzle-kit studio --config=drizzle.config.cjs",
     "check": "node --check src/app.js && node --check src/server.js",

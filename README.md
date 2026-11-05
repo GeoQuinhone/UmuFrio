@@ -276,3 +276,34 @@ UmuFrio/
 | Relatórios (CEO) | `GET /api/relatorios?de=&ate=` e `GET /api/relatorios/csv/:tabela?de=&ate=` |
 
 
+
+## Dados de demonstração (seed)
+
+Três comandos, todos na pasta `backend/` e depois de `npm run db:migrate`:
+
+| Comando | O que faz |
+| --- | --- |
+| `npm run db:seed` | Poucos dados (10 clientes, 18 atendimentos). Só roda com o banco sem clientes e com o CEO já criado. |
+| `npm run db:seed-teste -- --sim` | Carga curta (50 dias para trás, 5 à frente). **Apaga** clientes, atendimentos, PIX e estoque. |
+| `npm run db:seed-ano -- --sim` | **Carga anual**: ~13 meses de histórico e agenda até 31/12 do ano corrente. **Apaga** clientes, atendimentos, PIX, check-ins e movimentações de estoque e cria tudo de novo. |
+
+O `db:seed-ano` gera, com semente fixa e respeitando as regras do sistema:
+
+- **150 clientes** (12 inativos, 20 empresas com manutenção preventiva recorrente e o
+  cliente de teste do WhatsApp, Romário Rocha, com o telefone de
+  `SEED_TELEFONE_WHATSAPP`);
+- **~1.600 agendamentos** de segunda a sábado (sem domingos e feriados), com sazonalidade
+  (mais serviços no verão), cancelados, "não realizados" com motivo, atendimentos de
+  hoje em andamento e agenda futura até 31/12;
+- **ordens de serviço** com valor cobrado, forma de pagamento (dinheiro, PIX, débito e
+  crédito), pagamentos a receber, descontos e acréscimos com observação e peças extras;
+- **cobranças PIX** (modo demonstração) com algumas expiradas e canceladas;
+- **estoque** com entradas, saídas por atendimento e produtos abaixo do mínimo (alerta);
+- **check-in e check-out geolocalizados**, alguns fora do raio com justificativa;
+- **4 técnicos** (um deles entrou há ~5 meses, outro tirou férias em janeiro), veículos
+  e serviços com valor anterior inativo (mudança de preço em março de 2026).
+
+Se faltarem, são criados os usuários `ceo@`, `atendente@`, `estoque@` e `tecnico1@` a
+`tecnico4@umufrio.com.br` (senha `Teste@123`). Usuários, serviços e produtos que já
+existirem são mantidos. O comando mostra o banco de destino antes de apagar e se
+recusa a rodar com `NODE_ENV=production`.
