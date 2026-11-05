@@ -2,7 +2,7 @@ import { Router } from "express";
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { clientes, agendamentos } from "../db/schema.js";
-import { onlyDigits, roles, validId, cpfValido } from "../security.js";
+import { onlyDigits, roles, validId, documentoValido, tipoPessoaDoDocumento } from "../security.js";
 
 const router = Router();
 
@@ -19,9 +19,9 @@ function validarCliente(body, { validarCpf = true } = {}) {
   if (
     !body.nome?.trim() ||
     !body.telefone?.trim() ||
-    (validarCpf && !cpfValido(body.cpf))
+    (validarCpf && !documentoValido(body.cpf))
   ) {
-    return "Preencha nome, CPF válido e telefone.";
+    return "Preencha nome, CPF/CNPJ válido e telefone.";
   }
 
   if (
@@ -70,6 +70,7 @@ router.post(
       const dados = {
         nome: req.body.nome.trim(),
         cpf: onlyDigits(req.body.cpf),
+        tipoPessoa: tipoPessoaDoDocumento(req.body.cpf),
         telefone: req.body.telefone.trim(),
         cep: onlyDigits(req.body.cep),
         logradouro: req.body.logradouro.trim(),

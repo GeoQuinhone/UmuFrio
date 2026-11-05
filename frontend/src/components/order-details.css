@@ -238,3 +238,28 @@
   }
 }
 
+
+/* Fase 8: peças extras responsivas (o botão não estoura mais a caixa). */
+.os-extra-parts-form {
+  grid-template-columns: minmax(0, 1fr) minmax(90px, 120px);
+  align-items: end;
+}
+.os-extra-parts-form > * { min-width: 0; }
+.os-extra-parts-submit {
+  grid-column: 1 / -1;
+  width: 100%;
+  white-space: normal;
+  justify-content: center;
+}
+.os-extra-parts-error,
+.os-extra-parts-hint { grid-column: 1 / -1; margin: 0; }
+.os-extra-parts-hint { color: var(--grey); font-size: 0.8rem; }
+.os-extra-parts-list { list-style: none; padding-left: 0; display: grid; gap: 6px; }
+.os-extra-parts-list li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: #f8fbfc; }
+.os-extra-parts-list li span { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .os-extra-parts-form { grid-template-columns: 1fr; }
+}
+.cu-phone { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cu-contact-btn { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid #b9d6e3; border-radius: 999px; background: #f1f8fb; color: #176b9d; font-size: 12px; font-weight: 700; text-decoration: none; }
+.cu-contact-whats { border-color: #b5e3c8; background: #eefaf3; color: #1b7a47; }

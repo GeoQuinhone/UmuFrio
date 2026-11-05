@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { API_URL, apiRequest } from "../api.js";
 import Icon from "../components/Icon.jsx";
 import Layout from "../components/Layout.jsx";
 import { formaPagamentoLabel, formatMoeda } from "../utils/atendimento.js";
+import { categoriaLabel } from "../utils/despesas.js";
 import { baixarArquivo, gerarRelatorioPdf } from "../utils/relatorioPdf.js";
 import "./relatorios.css";
 
@@ -19,13 +21,13 @@ const ABAS = [
 
 const CRITERIOS = {
   faturamento:
-    "Considera pagamentos confirmados dentro do período, pela data da confirmação. “A receber” é o que está em aberto hoje (agendado, em andamento ou concluído e ainda não pago).",
+    "Considera pagamentos confirmados dentro do período, pela data da confirmação (regime de caixa). Gastos = custo das peças usadas nos atendimentos do período + despesas lançadas no período; lucro = faturamento - gastos. “A receber” é o que está em aberto hoje (em andamento ou concluído e ainda não pago). A comparação usa o período anterior de mesma duração.",
   servicos:
-    "Considera os atendimentos agendados dentro do período. Receita = valor cobrado nos concluídos; recebido = parte já confirmada.",
+    "Considera os atendimentos agendados dentro do período. Receita = valor cobrado nos concluídos (inclui peças extras); recebido = parte já confirmada; participação = fatia da receita total. Clique em um serviço ou técnico para ver os atendimentos.",
   estoque:
-    "Considera as saídas de estoque feitas no período. O custo usa o preço unitário atual do produto. “Abaixo do mínimo” mostra a situação de hoje.",
+    "Considera as saídas de estoque feitas no período. O custo usa o preço unitário registrado na movimentação. “No mínimo ou abaixo” (saldo menor ou igual ao mínimo) e o valor em estoque mostram a situação de hoje.",
   atendimentos:
-    "Considera os atendimentos agendados dentro do período, pela data do agendamento. Os check-ins são os registrados nesses atendimentos; “fora do raio” é a posição do técnico além do limite do endereço do cliente.",
+    "Considera os atendimentos agendados dentro do período, pela data do agendamento. Os check-ins são os registrados nesses atendimentos; “fora do raio” é a posição do técnico além do limite do endereço do cliente. Clique em uma situação ou motivo para ver os pedidos.",
 };
 
 const SITUACOES = [
@@ -40,6 +42,9 @@ const TABELAS_CSV = {
   faturamento: [
     ["faturamento-por-periodo", "Faturamento por período"],
     ["faturamento-por-forma", "Por forma de pagamento"],
+    ["faturamento-pagos", "Quem pagou"],
+    ["faturamento-pendentes", "Quem falta pagar"],
+    ["gastos-por-categoria", "Gastos e lucro"],
   ],
   servicos: [
     ["servicos-ranking", "Ranking de serviços"],
@@ -292,12 +297,205 @@ function GraficoFaturamento({ pontos, agrupamento }) {
   );
 }
 
+const NOMES_SITUACAO = {
+  concluido: "Concluído",
+  andamento: "Em andamento",
+  agendado: "Agendado",
+  cancelado: "Cancelado",
+  nao_realizado: "Não realizado",
+};
+
+const SITUACAO_TOM = {
+  concluido: "ok",
+  andamento: "info",
+  agendado: "neutro",
+  cancelado: "erro",
+  nao_realizado: "aviso",
+};
+
+function horaPeriodo(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+}
+
+// Lista dos atendimentos por trás de um número do relatório (ponto: clicar em
+// "não realizado" mostra os pedidos). Busca em /relatorios/atendimentos.
+function ListaAtendimentos({ periodo, filtro, titulo, onFechar }) {
+  const [estado, setEstado] = useState({ carregando: true, erro: "", dados: null });
+  const chave = JSON.stringify([periodo, filtro]);
+
+  useEffect(() => {
+    let ativo = true;
+    setEstado({ carregando: true, erro: "", dados: null });
+    const params = new URLSearchParams({ de: periodo.de, ate: periodo.ate, situacao: filtro.situacao || "todos" });
+    if (filtro.tecnicoId) params.set("tecnicoId", filtro.tecnicoId);
+    if (filtro.servicoId) params.set("servicoId", filtro.servicoId);
+    if (filtro.motivo) params.set("motivo", filtro.motivo);
+    apiRequest(`/relatorios/atendimentos?${params}`)
+      .then((dados) => ativo && setEstado({ carregando: false, erro: "", dados }))
+      .catch((falha) => ativo && setEstado({ carregando: false, erro: falha.message, dados: null }));
+    return () => {
+      ativo = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chave]);
+
+  const { carregando, erro, dados } = estado;
+
+  return (
+    <section className="rel-panel rel-drill" aria-live="polite">
+      <div className="rel-drill-head">
+        <h3>{titulo}</h3>
+        <div className="rel-drill-actions">
+          {filtro.situacao === "naoRealizados" && (
+            <Link className="rel-link" to="/agendamentos?aba=nao_realizados">Abrir em Agendamentos</Link>
+          )}
+          <button type="button" className="rel-link" onClick={onFechar}>Fechar lista</button>
+        </div>
+      </div>
+      {carregando && <Vazio texto="Carregando pedidos..." />}
+      {erro && <p className="catalog-form-error" role="alert">{erro}</p>}
+      {dados && dados.linhas.length === 0 && <Vazio texto="Nenhum pedido encontrado." />}
+      {dados && dados.linhas.length > 0 && (
+        <>
+          <div className="rel-table-wrap">
+            <table className="rel-table">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Cliente</th>
+                  <th>Serviço</th>
+                  <th>Técnico</th>
+                  <th>Situação</th>
+                  <th className="num">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dados.linhas.map((l) => (
+                  <tr key={l.id}>
+                    <td>{dataBr(l.data)} {l.hora}</td>
+                    <td>{l.cliente}</td>
+                    <td>{l.servico || "—"}</td>
+                    <td>{l.tecnico}</td>
+                    <td>
+                      <span className={`rel-tag rel-tag-${SITUACAO_TOM[l.situacao] || "neutro"}`}>
+                        {NOMES_SITUACAO[l.situacao] || l.situacao}
+                      </span>
+                      {l.situacao === "nao_realizado" && l.motivo && <small className="rel-motivo">{l.motivo}</small>}
+                      {l.situacao === "concluido" && (
+                        <small className="rel-motivo">{l.pago ? "Pago" : "Pagamento pendente"}</small>
+                      )}
+                    </td>
+                    <td className="num">{l.valor === null ? "—" : formatMoeda(l.valor)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {dados.total > dados.linhas.length && (
+            <p className="rel-hint">Mostrando os {dados.linhas.length} mais recentes de {dados.total}. Reduza o período para ver os demais.</p>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function Variacao({ valor }) {
+  if (valor === null || valor === undefined) return "sem base de comparação";
+  const sinal = valor > 0 ? "+" : "";
+  return `${sinal}${Number(valor).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% vs. período anterior`;
+}
+
+// Quem já pagou no período e quem ainda falta pagar.
+function PagosEPendentes({ f }) {
+  const [vista, setVista] = useState("pendentes");
+  const lista = vista === "pagos" ? f.pagos : f.pendentes;
+  const total = vista === "pagos" ? f.quantidade : f.aReceber.quantidade;
+
+  return (
+    <section className="rel-panel">
+      <div className="rel-drill-head">
+        <h3>Pagamentos: quem pagou e quem falta</h3>
+        <div className="rel-segment" role="tablist" aria-label="Pagamentos">
+          <button type="button" role="tab" aria-selected={vista === "pendentes"} className={vista === "pendentes" ? "is-active" : ""} onClick={() => setVista("pendentes")}>
+            Falta pagar ({numero(f.aReceber.quantidade)})
+          </button>
+          <button type="button" role="tab" aria-selected={vista === "pagos"} className={vista === "pagos" ? "is-active" : ""} onClick={() => setVista("pagos")}>
+            Já pagaram ({numero(f.quantidade)})
+          </button>
+        </div>
+      </div>
+
+      {lista.length === 0 ? (
+        <Vazio texto={vista === "pagos" ? "Nenhum pagamento confirmado neste período." : "Nenhum pagamento pendente. Tudo em dia!"} />
+      ) : (
+        <div className="rel-table-wrap">
+          <table className="rel-table">
+            <thead>
+              {vista === "pagos" ? (
+                <tr>
+                  <th>Pago em</th>
+                  <th>Cliente</th>
+                  <th>Serviço</th>
+                  <th>Forma</th>
+                  <th className="num">Valor</th>
+                </tr>
+              ) : (
+                <tr>
+                  <th>Atendimento</th>
+                  <th>Cliente</th>
+                  <th>Serviço</th>
+                  <th className="num">Em aberto</th>
+                  <th className="num">Valor</th>
+                </tr>
+              )}
+            </thead>
+            <tbody>
+              {lista.map((l) =>
+                vista === "pagos" ? (
+                  <tr key={l.id}>
+                    <td>{horaPeriodo(l.pagoEm)}</td>
+                    <td>{l.cliente}</td>
+                    <td>{l.servico}</td>
+                    <td>{formaPagamentoLabel(l.forma)}</td>
+                    <td className="num">{formatMoeda(l.valor)}</td>
+                  </tr>
+                ) : (
+                  <tr key={l.id}>
+                    <td>{dataBr(l.data)} {l.hora}</td>
+                    <td>{l.cliente}</td>
+                    <td>{l.servico}{l.ordemStatus !== "concluida" && <em className="rel-tag rel-tag-info rel-tag-inline">Em andamento</em>}</td>
+                    <td className="num">{l.diasEmAberto} d</td>
+                    <td className="num">{formatMoeda(l.valor)}</td>
+                  </tr>
+                ),
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {total > lista.length && (
+        <p className="rel-hint">Mostrando {lista.length} de {numero(total)}. A lista completa está no CSV.</p>
+      )}
+    </section>
+  );
+}
+
 function PainelFaturamento({ dados }) {
   const f = dados.faturamento;
   return (
     <>
       <section className="rel-cards" aria-label="Resumo do faturamento">
-        <Cartao rotulo="Faturamento" valor={formatMoeda(f.total)} detalhe={`${numero(f.quantidade)} pagamento(s)`} />
+        <Cartao rotulo="Faturamento" valor={formatMoeda(f.total)} detalhe={`${numero(f.quantidade)} pagamento(s) · ${Variacao({ valor: f.anterior?.variacaoPercentual })}`} />
+        <Cartao rotulo="Gastos" valor={formatMoeda(f.gastos?.total)} detalhe={`Peças ${formatMoeda(f.gastos?.pecas)} · despesas ${formatMoeda(f.gastos?.despesas)}`} />
+        <Cartao
+          rotulo="Lucro"
+          valor={formatMoeda(f.lucro)}
+          detalhe={f.margemPercentual === null || f.margemPercentual === undefined ? "sem faturamento no período" : `margem de ${percentual(f.margemPercentual)}`}
+        />
         <Cartao rotulo="Ticket médio" valor={formatMoeda(f.ticketMedio)} detalhe="por pagamento confirmado" />
         <Cartao
           rotulo="A receber"
@@ -305,6 +503,30 @@ function PainelFaturamento({ dados }) {
           detalhe={`${numero(f.aReceber.quantidade)} atendimento(s) em aberto`}
         />
       </section>
+
+      <section className="rel-panel">
+        <div className="rel-drill-head">
+          <h3>Gastos e lucro do período</h3>
+          <Link className="rel-link" to="/despesas">Gerenciar despesas</Link>
+        </div>
+        <div className="rel-lucro">
+          <div><span>Recebido</span><strong>{formatMoeda(f.total)}</strong></div>
+          <div className="is-menos"><span>− Peças usadas</span><strong>{formatMoeda(f.gastos?.pecas)}</strong></div>
+          <div className="is-menos"><span>− Despesas</span><strong>{formatMoeda(f.gastos?.despesas)}</strong></div>
+          <div className={`is-total ${f.lucro < 0 ? "is-negativo" : ""}`}><span>= Lucro</span><strong>{formatMoeda(f.lucro)}</strong></div>
+        </div>
+        <BarrasHorizontais
+          vazio="Nenhuma despesa lançada neste período. Cadastre em Despesas para ver o lucro real."
+          formatar={formatMoeda}
+          itens={(f.gastos?.porCategoria || []).map((c) => ({
+            chave: c.categoria,
+            rotulo: categoriaLabel(c.categoria),
+            valor: Number(c.total),
+            detalhe: `${numero(c.quantidade)} lançamento(s)`,
+          }))}
+        />
+      </section>
+
 
       <section className="rel-panel">
         <h3>Faturamento por {f.agrupamento === "mes" ? "mês" : "dia"}</h3>
@@ -324,16 +546,21 @@ function PainelFaturamento({ dados }) {
           }))}
         />
       </section>
+
+      <PagosEPendentes f={f} />
     </>
   );
 }
 
-function PainelServicos({ dados }) {
+function PainelServicos({ dados, periodo }) {
   const s = dados.servicos;
+  const [lista, setLista] = useState(null);
+
   return (
     <>
       <section className="rel-cards" aria-label="Resumo de serviços">
         <Cartao rotulo="Serviços concluídos" valor={numero(s.totalConcluidos)} />
+        <Cartao rotulo="Receita dos concluídos" valor={formatMoeda(s.receitaTotal)} detalhe="inclui peças extras" />
         <Cartao rotulo="Serviços diferentes" valor={numero(s.ranking.length)} detalhe="com atendimentos no período" />
         <Cartao rotulo="Técnicos ativos" valor={numero(s.tecnicos.length)} />
       </section>
@@ -347,9 +574,23 @@ function PainelServicos({ dados }) {
             chave: i.id,
             rotulo: i.nome,
             valor: Number(i.quantidade),
-            detalhe: `Receita ${formatMoeda(i.receita)} · recebido ${formatMoeda(i.recebido)}`,
+            detalhe: `Receita ${formatMoeda(i.receita)} (${percentual(i.participacao)}) · ticket ${formatMoeda(i.ticketMedio)} · recebido ${formatMoeda(i.recebido)}${i.aReceber > 0 ? ` · a receber ${formatMoeda(i.aReceber)}` : ""}`,
           }))}
         />
+        {s.ranking.length > 0 && (
+          <div className="rel-chips-row" aria-label="Ver atendimentos por serviço">
+            {s.ranking.map((i) => (
+              <button
+                key={i.id}
+                type="button"
+                className="rel-chip"
+                onClick={() => setLista({ titulo: `Atendimentos concluídos — ${i.nome}`, filtro: { situacao: "concluidos", servicoId: i.id } })}
+              >
+                {i.nome}
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="rel-panel">
@@ -364,8 +605,13 @@ function PainelServicos({ dados }) {
                   <th>Técnico</th>
                   <th className="num">Concluídos</th>
                   <th className="num">Receita</th>
+                  <th className="num">Ticket médio</th>
+                  <th className="num">A receber</th>
                   <th className="num">Não realizados</th>
+                  <th className="num">Cancelados</th>
+                  <th className="num">Taxa de conclusão</th>
                   <th className="num">Tempo médio</th>
+                  <th><span className="rel-sr">Ver</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -374,8 +620,21 @@ function PainelServicos({ dados }) {
                     <td>{t.nome}</td>
                     <td className="num">{numero(t.concluidos)}</td>
                     <td className="num">{formatMoeda(t.receita)}</td>
+                    <td className="num">{formatMoeda(t.ticketMedio)}</td>
+                    <td className="num">{formatMoeda(t.aReceber)}</td>
                     <td className="num">{numero(t.naoRealizados)}</td>
+                    <td className="num">{numero(t.cancelados)}</td>
+                    <td className="num">{percentual(t.taxaConclusao)}</td>
                     <td className="num">{duracao(t.tempoMedioMin)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="rel-link"
+                        onClick={() => setLista({ titulo: `Atendimentos de ${t.nome}`, filtro: { situacao: "todos", tecnicoId: t.id } })}
+                      >
+                        Ver pedidos
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -383,6 +642,8 @@ function PainelServicos({ dados }) {
           </div>
         )}
       </section>
+
+      {lista && <ListaAtendimentos periodo={periodo} filtro={lista.filtro} titulo={lista.titulo} onFechar={() => setLista(null)} />}
     </>
   );
 }
@@ -393,26 +654,28 @@ function PainelEstoque({ dados }) {
     <>
       <section className="rel-cards" aria-label="Resumo do estoque">
         <Cartao rotulo="Unidades consumidas" valor={numero(e.unidadesConsumidas)} detalhe={`${numero(e.unidadesExtras)} como peças extras`} />
-        <Cartao rotulo="Custo das peças" valor={formatMoeda(e.custoPecas)} detalhe="a preço unitário atual" />
-        <Cartao rotulo="Entradas no período" valor={numero(e.entradas)} detalhe="unidades recebidas" />
+        <Cartao rotulo="Custo das peças" valor={formatMoeda(e.custoPecas)} detalhe="consumo do período" />
+        <Cartao rotulo="Entradas no período" valor={numero(e.entradas)} detalhe={`${formatMoeda(e.valorEntradas)} em compras`} />
+        <Cartao rotulo="Valor em estoque" valor={formatMoeda(e.valorEmEstoque)} detalhe={`${numero(e.produtos)} produto(s) · ${numero(e.zerados)} zerado(s)`} />
       </section>
 
       {e.abaixoMinimo.length > 0 && (
         <section className="rel-panel rel-alert" aria-label="Produtos abaixo do mínimo">
           <h3>
             <Icon name="alertTriangle" size={16} />
-            Abaixo do estoque mínimo ({e.abaixoMinimo.length})
+            No estoque mínimo ou abaixo ({e.abaixoMinimo.length})
           </h3>
           <ul className="rel-list">
             {e.abaixoMinimo.map((p) => (
               <li key={p.id}>
-                <span>{p.nome}</span>
+                <span>{p.nome}{p.situacao === "zerado" && <em className="rel-tag rel-tag-erro rel-tag-inline">Zerado</em>}</span>
                 <strong>
                   {numero(p.saldo)} de {numero(p.minimo)}
                 </strong>
               </li>
             ))}
           </ul>
+          <Link className="rel-link" to="/estoque">Abrir Estoque</Link>
         </section>
       )}
 
@@ -433,8 +696,9 @@ function PainelEstoque({ dados }) {
   );
 }
 
-function PainelAtendimentos({ dados }) {
+function PainelAtendimentos({ dados, periodo }) {
   const a = dados.atendimentos;
+  const [lista, setLista] = useState(null);
   return (
     <>
       <section className="rel-cards" aria-label="Resumo dos atendimentos">
@@ -468,7 +732,15 @@ function PainelAtendimentos({ dados }) {
             {SITUACOES.map((s) => (
               <li key={s.chave}>
                 <span className="rel-dot" style={{ background: s.cor }} aria-hidden="true" />
-                <span className="rel-status-label">{s.label}</span>
+                <button
+                  type="button"
+                  className="rel-status-label rel-status-button"
+                  disabled={!Number(a[s.chave])}
+                  aria-label={`Ver pedidos: ${s.label} (${numero(a[s.chave])})`}
+                  onClick={() => setLista({ titulo: `${s.label} no período`, filtro: { situacao: s.chave } })}
+                >
+                  {s.label}
+                </button>
                 <div className="rel-hbar-track" aria-hidden="true">
                   <div
                     className="rel-hbar-fill"
@@ -493,13 +765,21 @@ function PainelAtendimentos({ dados }) {
           <ul className="rel-list">
             {a.motivos.map((m) => (
               <li key={m.motivo}>
-                <span>{m.motivo}</span>
+                <button
+                  type="button"
+                  className="rel-status-button"
+                  onClick={() => setLista({ titulo: `Não realizados — ${m.motivo}`, filtro: { situacao: "naoRealizados", motivo: m.motivo } })}
+                >
+                  {m.motivo}
+                </button>
                 <strong>{numero(m.quantidade)}</strong>
               </li>
             ))}
           </ul>
         )}
       </section>
+
+      {lista && <ListaAtendimentos periodo={periodo} filtro={lista.filtro} titulo={lista.titulo} onFechar={() => setLista(null)} />}
     </>
   );
 }
@@ -734,9 +1014,9 @@ export default function Relatorios({ onBack }) {
             )}
 
             {aba === "faturamento" && <PainelFaturamento dados={dados} />}
-            {aba === "servicos" && <PainelServicos dados={dados} />}
+            {aba === "servicos" && <PainelServicos dados={dados} periodo={dados.periodo} />}
             {aba === "estoque" && <PainelEstoque dados={dados} />}
-            {aba === "atendimentos" && <PainelAtendimentos dados={dados} />}
+            {aba === "atendimentos" && <PainelAtendimentos dados={dados} periodo={dados.periodo} />}
 
             <p className="rel-criteria">
               <strong>Como é calculado:</strong> {CRITERIOS[aba]}

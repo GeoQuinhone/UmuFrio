@@ -19,7 +19,8 @@ import {
   roles,
   validId,
 } from "../security.js";
-import { erroHttp, excluirOrdem } from "../ordemHelpers.js";
+import { erroHttp, excluirOrdem, sqlValorExtras, valorExtrasDaOrdem } from "../ordemHelpers.js";
+import { notificar, avisarEstoque } from "../notificacoes.js";
 import { avisarCliente } from "../whatsapp.js";
 
 const router = Router();
@@ -62,6 +63,7 @@ function selecaoComNomes() {
       observacaoPagamento: ordensServico.observacaoPagamento,
       servicoNome: servicos.nome,
       servicoValor: servicos.valor,
+      extrasValor: sqlValorExtras(ordensServico.id),
       clienteId: agendamentos.clienteId,
       clienteNome: clientes.nome,
       tecnicoId: agendamentos.tecnicoId,
@@ -454,6 +456,8 @@ router.patch(
         });
       }
 
+      const produtosTocados = [];
+
       const ordemAtualizada = await db.transaction(
         async (tx) => {
           const ordensEncontradas = await tx
@@ -545,6 +549,7 @@ router.patch(
                   servicoPecas.quantidadeNecessaria,
                 nome: produtos.nome,
                 saldo: produtos.saldo,
+                valorUnitario: produtos.valorUnitario,
               })
               .from(servicoPecas)
               .innerJoin(
@@ -594,6 +599,8 @@ router.patch(
                 throw error;
               }
 
+              produtosTocados.push(produtoAtualizado);
+
               await tx
                 .insert(movimentacoesEstoque)
                 .values({
@@ -602,6 +609,7 @@ router.patch(
                   ordemServicoId: id,
                   tipo: "saida",
                   quantidade: peca.quantidade,
+                  valorUnitario: peca.valorUnitario,
                 });
             }
           }
@@ -657,6 +665,24 @@ router.patch(
         .innerJoin(usuarios, eq(agendamentos.tecnicoId, usuarios.id))
         .innerJoin(servicos, eq(servicos.id, ordemAtualizada.servicoId))
         .where(eq(agendamentos.id, ordemAtualizada.agendamentoId));
+
+      // Fase 8: notificações do CEO (nunca derrubam o avanço da ordem).
+      for (const produto of produtosTocados) await avisarEstoque(produto);
+
+      if (dadosAviso) {
+        const iniciou = ordemAtualizada.status === "andamento";
+        const pendente = !iniciou && !ordemAtualizada.pagamentoConfirmado;
+        await notificar({
+          tipo: iniciou ? "atendimento_iniciado" : "atendimento_concluido",
+          agendamentoId: ordemAtualizada.agendamentoId,
+          ordemId: ordemAtualizada.id,
+          titulo: iniciou ? "Atendimento iniciado" : "Atendimento concluído",
+          mensagem:
+            `${dadosAviso.tecnicoNome} ${iniciou ? "iniciou" : "concluiu"} ` +
+            `${dadosAviso.servicoNome} para ${dadosAviso.clienteNome}.` +
+            (pendente ? " Pagamento pendente." : ""),
+        });
+      }
 
       const aviso = dadosAviso
         ? await avisarCliente(
@@ -794,12 +820,18 @@ router.patch(
           );
         }
 
+        // Fase 8: o valor esperado é o serviço + as peças extras usadas.
+        const extras = await valorExtrasDaOrdem(tx, id);
+        const esperado = Number(linha.servicoValor) + extras;
+
         if (
-          emCentavos(valorCobrado) !== emCentavos(linha.servicoValor) &&
+          emCentavos(valorCobrado) !== emCentavos(esperado) &&
           !observacao
         ) {
           throw erroHttp(
-            "O valor cobrado é diferente do valor do serviço. Informe o motivo na observação.",
+            extras > 0
+              ? "O valor cobrado é diferente de serviço + peças extras. Informe o motivo na observação."
+              : "O valor cobrado é diferente do valor do serviço. Informe o motivo na observação.",
             400,
           );
         }
@@ -871,6 +903,7 @@ router.get(
           produtoNome: produtos.nome,
           quantidade: movimentacoesEstoque.quantidade,
           data: movimentacoesEstoque.data,
+          valorUnitario: sql`COALESCE(${movimentacoesEstoque.valorUnitario}, ${produtos.valorUnitario})`,
         })
         .from(movimentacoesEstoque)
         .innerJoin(
@@ -912,6 +945,8 @@ router.post(
         });
       }
 
+      let produtoDepois = null;
+
       await db.transaction(async (tx) => {
         const ordensEncontradas = await tx
           .select()
@@ -936,6 +971,14 @@ router.post(
           throw error;
         }
 
+        if (ordem.pagamentoConfirmado) {
+          const error = new Error(
+            "O pagamento já foi confirmado. Peças extras não podem mais ser adicionadas.",
+          );
+          error.status = 409;
+          throw error;
+        }
+
         const agendamentosEncontrados = await tx
           .select()
           .from(agendamentos)
@@ -951,6 +994,18 @@ router.post(
             "Você não pode alterar esta ordem de serviço.",
           );
           error.status = 403;
+          throw error;
+        }
+
+        const pixPendente = await tx.execute(
+          sql`SELECT 1 FROM cobrancas_pix WHERE ordem_id = ${id} AND status = 'pendente' LIMIT 1`,
+        );
+
+        if ((pixPendente.rows ?? pixPendente).length) {
+          const error = new Error(
+            "Há um PIX pendente para este atendimento. Cancele-o antes de adicionar peças extras, pois o valor muda.",
+          );
+          error.status = 409;
           throw error;
         }
 
@@ -1005,8 +1060,36 @@ router.post(
           tipo: "saida",
           quantidade,
           extra: 1,
+          valorUnitario: produto.valorUnitario,
         });
+
+        // Se o valor cobrado ainda era o padrão (serviço + extras anteriores),
+        // acompanha o novo total; se foi ajustado à mão, respeita o ajuste.
+        const [servicoDaOrdem] = await tx
+          .select({ valor: servicos.valor })
+          .from(servicos)
+          .where(eq(servicos.id, ordem.servicoId));
+        const extrasDepois = await valorExtrasDaOrdem(tx, id);
+        const extrasAntes = extrasDepois - quantidade * Number(produto.valorUnitario);
+        const esperadoAntes = Number(servicoDaOrdem.valor) + extrasAntes;
+
+        if (
+          ordem.valorCobrado !== null &&
+          emCentavos(ordem.valorCobrado) === emCentavos(esperadoAntes)
+        ) {
+          await tx
+            .update(ordensServico)
+            .set({
+              valorCobrado: (Number(servicoDaOrdem.valor) + extrasDepois).toFixed(2),
+            })
+            .where(eq(ordensServico.id, id));
+        }
+
+        produtoDepois = produtoAtualizado;
       });
+
+      // Fase 8: peça extra pode levar o estoque ao mínimo/zero -> avisa o CEO.
+      if (produtoDepois) await avisarEstoque(produtoDepois);
 
       res.status(201).json({ sucesso: true });
     } catch (error) {

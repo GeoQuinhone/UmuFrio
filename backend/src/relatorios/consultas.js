@@ -6,6 +6,8 @@ import { erroHttp } from "../httpError.js";
 //  - Faturamento: pagamentos CONFIRMADOS dentro do período (data da confirmação).
 //  - Serviços, técnicos e atendimentos: atendimentos AGENDADOS dentro do período.
 //  - Estoque: saídas registradas no período; "abaixo do mínimo" é a situação de hoje.
+//  - Gastos e lucro (Fase 8, regime de caixa): lucro = faturamento recebido no
+//    período - custo das peças consumidas em atendimentos - despesas lançadas.
 //
 // Todas as funções recebem `q(texto, parametros)` (linhas do resultado), como o
 // serviço de PIX, para rodar com o pool do Postgres ou com um adaptador de teste.
@@ -70,6 +72,23 @@ const VALOR = "COALESCE(o.valor_cobrado, s.valor)";
 const MINUTOS_ATENDIMENTO = `extract(epoch FROM (o.concluida_em - o.iniciada_em)) / 60`;
 const COM_TEMPO = `o.status = 'concluida' AND o.iniciada_em IS NOT NULL AND o.concluida_em >= o.iniciada_em`;
 
+function somarDias(dataIso, dias) {
+  const d = new Date(`${dataIso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
+
+export const CATEGORIAS_DESPESA = [
+  "combustivel",
+  "salarios",
+  "aluguel",
+  "manutencao",
+  "ferramentas",
+  "marketing",
+  "impostos",
+  "outros",
+];
+
 function numero(valor) {
   return valor === null || valor === undefined ? 0 : Number(valor);
 }
@@ -86,7 +105,10 @@ async function faturamento(q, { de, ate, fuso }) {
 
   const porMes = diasEntre(de, ate) > LIMITE_DIAS_POR_DIA;
 
-  const [porForma, porPeriodo, [aberto]] = await Promise.all([
+  const anteriorAte = somarDias(de, -1);
+  const anteriorDe = somarDias(anteriorAte, -(diasEntre(de, ate) - 1));
+
+  const [porForma, porPeriodo, [aberto], pagos, pendentes, [anterior], [pecas], despesasCat] = await Promise.all([
     q(
       `SELECT COALESCE(o.forma_pagamento, 'nao_informada') AS forma,
               count(*)::int AS quantidade,
@@ -132,15 +154,121 @@ async function faturamento(q, { de, ate, fuso }) {
           AND o.pagamento_confirmado = 0
           AND a.status = 'agendado'`,
     ),
+    // Fase 8: quem já pagou no período (lista) e quem falta pagar (hoje).
+    q(
+      `SELECT o.id, c.nome AS cliente, s.nome AS servico, u.nome AS tecnico,
+              COALESCE(o.forma_pagamento, 'nao_informada') AS forma,
+              ${VALOR}::float8 AS valor,
+              o.pagamento_confirmado_em AS "pagoEm"
+         FROM ordens_servico o
+         JOIN servicos s ON s.id = o.servico_id
+         JOIN agendamentos a ON a.id = o.agendamento_id
+         JOIN clientes c ON c.id = a.cliente_id
+         JOIN usuarios u ON u.id = a.tecnico_id
+        WHERE ${confirmadoNoPeriodo}
+        ORDER BY o.pagamento_confirmado_em DESC, o.id DESC
+        LIMIT 300`,
+      [de, ate, fuso],
+    ),
+    q(
+      `SELECT o.id, c.nome AS cliente, s.nome AS servico, u.nome AS tecnico,
+              o.status AS "ordemStatus",
+              to_char(a.data, 'YYYY-MM-DD') AS data,
+              to_char(a.hora, 'HH24:MI') AS hora,
+              ${VALOR}::float8 AS valor,
+              (CURRENT_DATE - a.data)::int AS "diasEmAberto"
+         FROM ordens_servico o
+         JOIN servicos s ON s.id = o.servico_id
+         JOIN agendamentos a ON a.id = o.agendamento_id
+         JOIN clientes c ON c.id = a.cliente_id
+         JOIN usuarios u ON u.id = a.tecnico_id
+        WHERE o.status IN ('andamento', 'concluida')
+          AND o.pagamento_confirmado = 0
+          AND a.status = 'agendado'
+        ORDER BY a.data, a.hora, o.id
+        LIMIT 300`,
+    ),
+    q(
+      `SELECT count(*)::int AS quantidade,
+              COALESCE(sum(${VALOR}), 0)::float8 AS total
+         FROM ordens_servico o
+         JOIN servicos s ON s.id = o.servico_id
+        WHERE o.pagamento_confirmado = 1
+          AND (o.pagamento_confirmado_em::timestamptz AT TIME ZONE $3)::date BETWEEN $1::date AND $2::date`,
+      [anteriorDe, anteriorAte, fuso],
+    ),
+    q(
+      `SELECT COALESCE(sum(m.quantidade * COALESCE(m.valor_unitario, p.valor_unitario)), 0)::float8 AS total
+         FROM movimentacoes_estoque m
+         JOIN produtos p ON p.id = m.produto_id
+        WHERE m.tipo = 'saida'
+          AND m.ordem_servico_id IS NOT NULL
+          AND (m.data::timestamptz AT TIME ZONE $3)::date BETWEEN $1::date AND $2::date`,
+      [de, ate, fuso],
+    ),
+    q(
+      `SELECT categoria, count(*)::int AS quantidade, sum(valor)::float8 AS total
+         FROM despesas
+        WHERE data BETWEEN $1::date AND $2::date
+        GROUP BY categoria
+        ORDER BY total DESC, categoria`,
+      [de, ate],
+    ),
   ]);
 
   const quantidade = porForma.reduce((s, l) => s + numero(l.quantidade), 0);
   const total = porForma.reduce((s, l) => s + numero(l.total), 0);
 
+  const custoPecas = arredondar(pecas?.total);
+  const totalDespesas = arredondar(despesasCat.reduce((s, l) => s + numero(l.total), 0));
+  const gastosTotal = arredondar(custoPecas + totalDespesas);
+  const lucro = arredondar(total - gastosTotal);
+  const totalAnterior = arredondar(anterior?.total);
+
   return {
     total: arredondar(total),
     quantidade,
     ticketMedio: quantidade > 0 ? arredondar(total / quantidade) : 0,
+    anterior: {
+      de: anteriorDe,
+      ate: anteriorAte,
+      total: totalAnterior,
+      quantidade: numero(anterior?.quantidade),
+      variacaoPercentual:
+        totalAnterior > 0 ? arredondar(((total - totalAnterior) / totalAnterior) * 100, 1) : null,
+    },
+    gastos: {
+      pecas: custoPecas,
+      despesas: totalDespesas,
+      total: gastosTotal,
+      porCategoria: despesasCat.map((l) => ({
+        categoria: l.categoria,
+        quantidade: numero(l.quantidade),
+        total: arredondar(l.total),
+      })),
+    },
+    lucro,
+    margemPercentual: total > 0 ? arredondar((lucro / total) * 100, 1) : null,
+    pagos: pagos.map((l) => ({
+      id: l.id,
+      cliente: l.cliente,
+      servico: l.servico,
+      tecnico: l.tecnico,
+      forma: l.forma,
+      valor: arredondar(l.valor),
+      pagoEm: l.pagoEm,
+    })),
+    pendentes: pendentes.map((l) => ({
+      id: l.id,
+      cliente: l.cliente,
+      servico: l.servico,
+      tecnico: l.tecnico,
+      ordemStatus: l.ordemStatus,
+      data: l.data,
+      hora: l.hora,
+      valor: arredondar(l.valor),
+      diasEmAberto: Math.max(0, numero(l.diasEmAberto)),
+    })),
     aReceber: {
       quantidade: numero(aberto?.quantidade),
       total: arredondar(aberto?.total),
@@ -183,6 +311,8 @@ async function servicosETecnicos(q, { de, ate }) {
               count(*) FILTER (WHERE a.status = 'agendado' AND o.status = 'concluida')::int AS concluidos,
               COALESCE(sum(${VALOR}) FILTER (WHERE a.status = 'agendado' AND o.status = 'concluida'), 0)::float8 AS receita,
               count(*) FILTER (WHERE a.nao_realizado = 1)::int AS "naoRealizados",
+              count(*) FILTER (WHERE a.status = 'cancelado' AND a.nao_realizado = 0)::int AS cancelados,
+              COALESCE(sum(${VALOR}) FILTER (WHERE a.status = 'agendado' AND o.status = 'concluida' AND o.pagamento_confirmado = 0), 0)::float8 AS "aReceber",
               round(avg(${MINUTOS_ATENDIMENTO}) FILTER (WHERE ${COM_TEMPO}))::int AS "tempoMedioMin"
          FROM agendamentos a
          JOIN usuarios u ON u.id = a.tecnico_id
@@ -196,15 +326,20 @@ async function servicosETecnicos(q, { de, ate }) {
   ]);
 
   const totalConcluidos = ranking.reduce((s, l) => s + numero(l.quantidade), 0);
+  const receitaTotal = ranking.reduce((s, l) => s + numero(l.receita), 0);
 
   return {
     totalConcluidos,
+    receitaTotal: arredondar(receitaTotal),
     ranking: ranking.map((l) => ({
       id: l.id,
       nome: l.nome,
       quantidade: numero(l.quantidade),
       receita: arredondar(l.receita),
       recebido: arredondar(l.recebido),
+      aReceber: arredondar(numero(l.receita) - numero(l.recebido)),
+      ticketMedio: numero(l.quantidade) > 0 ? arredondar(numero(l.receita) / numero(l.quantidade)) : 0,
+      participacao: receitaTotal > 0 ? arredondar((numero(l.receita) / receitaTotal) * 100, 1) : null,
     })),
     tecnicos: tecnicos.map((l) => ({
       id: l.id,
@@ -212,13 +347,20 @@ async function servicosETecnicos(q, { de, ate }) {
       concluidos: numero(l.concluidos),
       receita: arredondar(l.receita),
       naoRealizados: numero(l.naoRealizados),
+      cancelados: numero(l.cancelados),
+      aReceber: arredondar(l.aReceber),
+      ticketMedio: numero(l.concluidos) > 0 ? arredondar(numero(l.receita) / numero(l.concluidos)) : 0,
+      taxaConclusao:
+        numero(l.concluidos) + numero(l.naoRealizados) + numero(l.cancelados) > 0
+          ? arredondar((numero(l.concluidos) / (numero(l.concluidos) + numero(l.naoRealizados) + numero(l.cancelados))) * 100, 1)
+          : null,
       tempoMedioMin: l.tempoMedioMin === null || l.tempoMedioMin === undefined ? null : Number(l.tempoMedioMin),
     })),
   };
 }
 
 async function estoque(q, { de, ate, fuso }) {
-  const [consumo, [entradas], abaixoMinimo] = await Promise.all([
+  const [consumo, [entradas], abaixoMinimo, [posicao]] = await Promise.all([
     q(
       `SELECT p.id,
               p.nome,
@@ -238,8 +380,10 @@ async function estoque(q, { de, ate, fuso }) {
       [de, ate, fuso],
     ),
     q(
-      `SELECT COALESCE(sum(m.quantidade), 0)::int AS quantidade
+      `SELECT COALESCE(sum(m.quantidade), 0)::int AS quantidade,
+              COALESCE(sum(m.quantidade * COALESCE(m.valor_unitario, p.valor_unitario)), 0)::float8 AS valor
          FROM movimentacoes_estoque m
+         JOIN produtos p ON p.id = m.produto_id
         WHERE m.tipo = 'entrada'
           AND (m.data::timestamptz AT TIME ZONE $3)::date BETWEEN $1::date AND $2::date`,
       [de, ate, fuso],
@@ -249,6 +393,12 @@ async function estoque(q, { de, ate, fuso }) {
          FROM produtos
         WHERE saldo <= quantidade_minima
         ORDER BY (saldo - quantidade_minima), nome`,
+    ),
+    q(
+      `SELECT count(*)::int AS produtos,
+              count(*) FILTER (WHERE saldo <= 0)::int AS zerados,
+              COALESCE(sum(saldo * valor_unitario), 0)::float8 AS "valorEmEstoque"
+         FROM produtos`,
     ),
   ]);
 
@@ -260,6 +410,10 @@ async function estoque(q, { de, ate, fuso }) {
     unidadesConsumidas: unidades,
     unidadesExtras,
     entradas: numero(entradas?.quantidade),
+    valorEntradas: arredondar(entradas?.valor),
+    produtos: numero(posicao?.produtos),
+    zerados: numero(posicao?.zerados),
+    valorEmEstoque: arredondar(posicao?.valorEmEstoque),
     custoPecas: arredondar(custoPecas),
     maisConsumidos: consumo.map((l) => ({
       id: l.id,
@@ -276,6 +430,7 @@ async function estoque(q, { de, ate, fuso }) {
       nome: l.nome,
       saldo: numero(l.saldo),
       minimo: numero(l.minimo),
+      situacao: numero(l.saldo) <= 0 ? "zerado" : "baixo",
     })),
   };
 }
@@ -350,6 +505,87 @@ async function atendimentos(q, { de, ate }) {
   };
 }
 
+// Fase 8: lista dos atendimentos por trás de um número do relatório (clicar em
+// "Não realizados", "Concluídos"... mostra os pedidos). Filtros opcionais por
+// técnico e por serviço.
+export const SITUACOES_LISTA = {
+  todos: "TRUE",
+  concluidos: "(a.status = 'agendado' AND o.status = 'concluida')",
+  emAndamento: "(a.status = 'agendado' AND o.status = 'andamento')",
+  agendados: "(a.status = 'agendado' AND (o.id IS NULL OR o.status = 'aberta'))",
+  cancelados: "(a.status = 'cancelado' AND a.nao_realizado = 0)",
+  naoRealizados: "(a.nao_realizado = 1)",
+};
+
+export async function listarAtendimentos(q, periodo, { situacao = "todos", tecnicoId = null, servicoId = null, motivo = null } = {}, fuso = FUSO_PADRAO) {
+  const { de, ate } = validarPeriodo(periodo, fuso);
+  const filtro = SITUACOES_LISTA[situacao];
+  if (!filtro) throw erroHttp("Situação inválida.", 400);
+
+  const params = [de, ate];
+  let extra = "";
+  if (tecnicoId) {
+    params.push(Number(tecnicoId));
+    extra += ` AND a.tecnico_id = $${params.length}`;
+  }
+  if (servicoId) {
+    params.push(Number(servicoId));
+    extra += ` AND o.servico_id = $${params.length}`;
+  }
+  if (motivo) {
+    params.push(String(motivo));
+    extra += ` AND COALESCE(NULLIF(trim(a.motivo_nao_realizado), ''), 'Não informado') = $${params.length}`;
+  }
+
+  const linhas = await q(
+    `SELECT a.id,
+            to_char(a.data, 'YYYY-MM-DD') AS data,
+            to_char(a.hora, 'HH24:MI') AS hora,
+            c.nome AS cliente,
+            u.nome AS tecnico,
+            s.nome AS servico,
+            a.motivo_nao_realizado AS motivo,
+            CASE
+              WHEN a.nao_realizado = 1 THEN 'nao_realizado'
+              WHEN a.status = 'cancelado' THEN 'cancelado'
+              WHEN o.status = 'concluida' THEN 'concluido'
+              WHEN o.status = 'andamento' THEN 'andamento'
+              ELSE 'agendado'
+            END AS situacao,
+            ${VALOR}::float8 AS valor,
+            COALESCE(o.pagamento_confirmado, 0)::int AS pago,
+            count(*) OVER ()::int AS "totalLinhas"
+       FROM agendamentos a
+       JOIN clientes c ON c.id = a.cliente_id
+       JOIN usuarios u ON u.id = a.tecnico_id
+       LEFT JOIN ordens_servico o ON o.agendamento_id = a.id
+       LEFT JOIN servicos s ON s.id = o.servico_id
+      WHERE a.data BETWEEN $1::date AND $2::date
+        AND ${filtro}${extra}
+      ORDER BY a.data DESC, a.hora DESC, a.id DESC
+      LIMIT 300`,
+    params,
+  );
+
+  return {
+    periodo: { de, ate },
+    situacao,
+    total: linhas.length ? numero(linhas[0].totalLinhas) : 0,
+    linhas: linhas.map((l) => ({
+      id: l.id,
+      data: l.data,
+      hora: l.hora,
+      cliente: l.cliente,
+      tecnico: l.tecnico,
+      servico: l.servico,
+      motivo: l.motivo,
+      situacao: l.situacao,
+      valor: l.valor === null || l.valor === undefined ? null : arredondar(l.valor),
+      pago: Boolean(l.pago),
+    })),
+  };
+}
+
 export async function gerarRelatorio(q, periodo, fuso = FUSO_PADRAO) {
   const { de, ate } = validarPeriodo(periodo, fuso);
   const base = { de, ate, fuso };
@@ -399,6 +635,51 @@ export const TABELAS_CSV = {
     ],
     linhas: (r) =>
       r.faturamento.porForma.map((l) => ({ ...l, forma: NOMES_FORMA[l.forma] || l.forma })),
+  },
+  "faturamento-pagos": {
+    titulo: "Pagamentos recebidos",
+    colunas: [
+      { chave: "pagoEm", titulo: "Pago em", tipo: "texto" },
+      { chave: "cliente", titulo: "Cliente", tipo: "texto" },
+      { chave: "servico", titulo: "Serviço", tipo: "texto" },
+      { chave: "tecnico", titulo: "Técnico", tipo: "texto" },
+      { chave: "forma", titulo: "Forma", tipo: "texto" },
+      { chave: "valor", titulo: "Valor (R$)", tipo: "moeda" },
+    ],
+    linhas: (r) =>
+      r.faturamento.pagos.map((l) => ({
+        ...l,
+        pagoEm: l.pagoEm ? new Date(l.pagoEm).toLocaleString("pt-BR", { timeZone: FUSO_PADRAO }) : "",
+        forma: NOMES_FORMA[l.forma] || l.forma,
+      })),
+  },
+  "faturamento-pendentes": {
+    titulo: "Pagamentos pendentes",
+    colunas: [
+      { chave: "data", titulo: "Data", tipo: "texto" },
+      { chave: "cliente", titulo: "Cliente", tipo: "texto" },
+      { chave: "servico", titulo: "Serviço", tipo: "texto" },
+      { chave: "tecnico", titulo: "Técnico", tipo: "texto" },
+      { chave: "diasEmAberto", titulo: "Dias em aberto", tipo: "int" },
+      { chave: "valor", titulo: "Valor (R$)", tipo: "moeda" },
+    ],
+    linhas: (r) => r.faturamento.pendentes,
+  },
+  "gastos-por-categoria": {
+    titulo: "Gastos e lucro",
+    colunas: [
+      { chave: "categoria", titulo: "Item", tipo: "texto" },
+      { chave: "total", titulo: "Valor (R$)", tipo: "moeda" },
+    ],
+    linhas: (r) => [
+      { categoria: "Faturamento recebido", total: r.faturamento.total },
+      { categoria: "Custo das peças", total: -r.faturamento.gastos.pecas },
+      ...r.faturamento.gastos.porCategoria.map((c) => ({
+        categoria: `Despesa: ${c.categoria}`,
+        total: -c.total,
+      })),
+      { categoria: "Lucro", total: r.faturamento.lucro },
+    ],
   },
   "servicos-ranking": {
     titulo: "Serviços mais realizados",

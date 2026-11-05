@@ -86,9 +86,34 @@ export function podeRegistrarPagamento(atendimento) {
 
 // Valor a exibir: o cobrado, se já registrado, senão o de tabela do serviço.
 export function valorDoAtendimento(atendimento) {
-  return atendimento.valorCobrado ?? atendimento.servicoValor ?? null;
+  if (atendimento.valorCobrado !== null && atendimento.valorCobrado !== undefined) return atendimento.valorCobrado;
+  if (atendimento.servicoValor === null || atendimento.servicoValor === undefined) return null;
+  return Number(atendimento.servicoValor) + Number(atendimento.extrasValor ?? 0);
 }
 
 export function pagamentoConfirmado(atendimento) {
   return Boolean(atendimento.pagamentoConfirmado);
+}
+
+
+// Fase 8: link do WhatsApp para o técnico falar com o cliente (wa.me), com uma
+// mensagem pronta. Devolve null se o telefone não tiver DDD + número válidos.
+export function linkWhatsappCliente(atendimento, tecnicoNome = "") {
+  const digitos = String(atendimento?.clienteTelefone || "").replace(/\D/g, "");
+  let numero = null;
+  if (digitos.length === 10 || digitos.length === 11) numero = `55${digitos}`;
+  else if (digitos.startsWith("55") && (digitos.length === 12 || digitos.length === 13)) numero = digitos;
+  if (!numero) return null;
+
+  const hora = atendimento?.hora ? String(atendimento.hora).slice(0, 5) : "";
+  const quando = hora ? ` hoje às ${hora}` : "";
+  const servico = atendimento?.servicoNome ? ` (${atendimento.servicoNome})` : "";
+  const quem = tecnicoNome ? `${tecnicoNome.split(/\s+/)[0]}, da UmuFrio` : "da UmuFrio";
+  const texto = `Olá, ${atendimento?.clienteNome || ""}! Aqui é ${quem}. Estou entrando em contato sobre o atendimento${servico}${quando}.`;
+  return `https://wa.me/${numero}?text=${encodeURIComponent(texto)}`;
+}
+
+export function linkLigacao(telefone) {
+  const digitos = String(telefone || "").replace(/\D/g, "");
+  return digitos.length >= 10 ? `tel:+55${digitos.replace(/^55(?=\d{12,13}$)/, "")}` : null;
 }

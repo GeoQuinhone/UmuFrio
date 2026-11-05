@@ -5,6 +5,7 @@ import { roles } from "../security.js";
 import {
   FUSO_PADRAO,
   gerarRelatorio,
+  listarAtendimentos,
   tabelaParaCsv,
 } from "../relatorios/consultas.js";
 
@@ -25,6 +26,28 @@ router.get("/", async (req, res, next) => {
   try {
     res.json(
       await gerarRelatorio(q, { de: req.query.de, ate: req.query.ate }, fuso()),
+    );
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/relatorios/atendimentos?situacao=naoRealizados&de=...&ate=...
+// (opcionais: tecnicoId, servicoId, motivo) — lista por trás dos números.
+router.get("/atendimentos", async (req, res, next) => {
+  try {
+    res.json(
+      await listarAtendimentos(
+        q,
+        { de: req.query.de, ate: req.query.ate },
+        {
+          situacao: req.query.situacao || "todos",
+          tecnicoId: req.query.tecnicoId || null,
+          servicoId: req.query.servicoId || null,
+          motivo: req.query.motivo || null,
+        },
+        fuso(),
+      ),
     );
   } catch (error) {
     next(error);

@@ -11,6 +11,11 @@ import {
 import "./catalog-stock.css";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import { mascaraMoeda, moedaParaNumero } from "../utils/mascaras.js";
+import ProdutoSelect from "../components/ProdutoSelect.jsx";
+import { situacaoEstoque } from "../utils/estoque.js";
+
+// Evita o "05" ao digitar em campos numéricos que começam em 0.
+const semZeroAEsquerda = (valor) => String(valor).replace(/^0+(?=\d)/, "");
 
 const FORM_VAZIO = {
   nome: "",
@@ -52,14 +57,15 @@ function saldoMinimo(produto) {
 }
 
 function saudeEstoque(produto) {
-  const saldo = Number(produto.saldo ?? 0);
+  // Mesma regra do backend e dos relatórios: saldo igual ao mínimo já é "baixo".
+  const situacao = situacaoEstoque(produto);
 
-  if (saldo <= 0) {
+  if (situacao === "zerado") {
     return { label: "Crítico", tone: "critical" };
   }
 
-  if (saldo < saldoMinimo(produto)) {
-    return { label: "Baixo", tone: "low" };
+  if (situacao === "baixo") {
+    return { label: "No mínimo", tone: "low" };
   }
 
   return { label: "Saudável", tone: "healthy" };
@@ -173,7 +179,7 @@ export default function Estoque({ crud, onBack }) {
   );
 
   const belowMinimumCount = produtos.filter(
-    (produto) => Number(produto.saldo ?? 0) < saldoMinimo(produto),
+    (produto) => situacaoEstoque(produto) !== "ok",
   ).length;
   const inventoryValue = produtos.reduce(
     (total, produto) =>
@@ -187,20 +193,29 @@ export default function Estoque({ crud, onBack }) {
     0,
   );
 
+  const movimentoProduto = produtos.find(
+    (item) => String(item.id) === String(movementForm.produtoId),
+  );
+  const movimentoQtd = Number(movementForm.quantidade);
+  const saldoApos =
+    movimentoProduto && Number.isInteger(movimentoQtd) && movimentoQtd > 0
+      ? Number(movimentoProduto.saldo ?? 0) +
+        (movementForm.tipo === "entrada" ? movimentoQtd : -movimentoQtd)
+      : null;
+
   const filteredProducts = produtos.filter((produto) => {
     const search = searchTerm.trim().toLocaleLowerCase("pt-BR");
     const searchable = [
       produto.nome,
       produto.codigo,
       produto.sku,
-      produto.categoria,
       produto.id,
     ]
       .filter((value) => value !== null && value !== undefined)
       .join(" ")
       .toLocaleLowerCase("pt-BR");
     const saldo = Number(produto.saldo ?? 0);
-    const belowMinimum = saldo < saldoMinimo(produto);
+    const belowMinimum = situacaoEstoque(produto) !== "ok";
     const healthMatches =
       statusFilter === "todos" ||
       (statusFilter === "critico" && saldo <= 0) ||
@@ -306,10 +321,7 @@ export default function Estoque({ crud, onBack }) {
   }
 
   function abrirMovimentacao() {
-    setMovementForm({
-      ...MOVIMENTACAO_VAZIA,
-      produtoId: produtos[0] ? String(produtos[0].id) : "",
-    });
+    setMovementForm({ ...MOVIMENTACAO_VAZIA });
     setMovementError("");
     setShowMovement(true);
   }
@@ -447,22 +459,14 @@ export default function Estoque({ crud, onBack }) {
               <>
                 <div className="catalog-form-grid">
                   <Field label="Produto">
-                    <select
-                      className="input"
+                    <ProdutoSelect
+                      produtos={produtos}
                       value={movementForm.produtoId}
-                      onChange={(event) =>
-                        setMovementForm({
-                          ...movementForm,
-                          produtoId: event.target.value,
-                        })
+                      onChange={(id) =>
+                        setMovementForm({ ...movementForm, produtoId: id })
                       }
-                    >
-                      {produtos.map((produto) => (
-                        <option key={produto.id} value={produto.id}>
-                          {produto.nome} · saldo {produto.saldo ?? 0}
-                        </option>
-                      ))}
-                    </select>
+                      exigirSaldo={movementForm.tipo === "saida"}
+                    />
                   </Field>
                   <Field label="Tipo de movimentação">
                     <select
@@ -488,12 +492,31 @@ export default function Estoque({ crud, onBack }) {
                       onChange={(event) =>
                         setMovementForm({
                           ...movementForm,
-                          quantidade: event.target.value,
+                          quantidade: semZeroAEsquerda(event.target.value),
                         })
                       }
                     />
                   </Field>
                 </div>
+                {movimentoProduto && (
+                  <div className="stock-movement-info" role="status">
+                    <span>Saldo atual <strong>{movimentoProduto.saldo ?? 0} un.</strong></span>
+                    <span>Mínimo <strong>{saldoMinimo(movimentoProduto)} un.</strong></span>
+                    <span>Valor unitário <strong>{formatarValor(movimentoProduto.valorUnitario)}</strong></span>
+                    {saldoApos !== null && (
+                      <span className={saldoApos <= saldoMinimo(movimentoProduto) ? "is-alerta" : ""}>
+                        Saldo após <strong>{saldoApos} un.</strong>
+                        {saldoApos < 0
+                          ? " (insuficiente)"
+                          : saldoApos <= 0
+                            ? " (zera o estoque)"
+                            : saldoApos <= saldoMinimo(movimentoProduto)
+                              ? " (ficará no mínimo)"
+                              : ""}
+                      </span>
+                    )}
+                  </div>
+                )}
                 <div className="catalog-form-actions">
                   <button
                     type="button"
@@ -564,7 +587,14 @@ export default function Estoque({ crud, onBack }) {
                   }
                 />
               </Field>
-              {!editingId && (
+              {editingId ? (
+                <Field
+                  label="Saldo atual"
+                  hint="Para alterar o saldo, use Registrar movimentação."
+                >
+                  <TextInput value={`${form.saldo} un.`} readOnly disabled />
+                </Field>
+              ) : (
                 <Field label="Saldo inicial">
                   <TextInput
                     type="number"
@@ -572,7 +602,7 @@ export default function Estoque({ crud, onBack }) {
                     step="1"
                     value={form.saldo}
                     onChange={(event) =>
-                      setForm({ ...form, saldo: event.target.value })
+                      setForm({ ...form, saldo: semZeroAEsquerda(event.target.value) })
                     }
                   />
                 </Field>
@@ -586,7 +616,7 @@ export default function Estoque({ crud, onBack }) {
                   onChange={(event) =>
                     setForm({
                       ...form,
-                      quantidadeMinima: event.target.value,
+                      quantidadeMinima: semZeroAEsquerda(event.target.value),
                     })
                   }
                 />
@@ -620,7 +650,7 @@ export default function Estoque({ crud, onBack }) {
           <article className="catalog-stat-card catalog-stat-orange">
             <span>Estoque crítico</span>
             <strong>{belowMinimumCount}</strong>
-            <small>Abaixo do mínimo definido</small>
+            <small>Zerados ou no mínimo</small>
           </article>
           <article className="catalog-stat-card catalog-stat-blue">
             <span>Valor em estoque</span>
@@ -641,8 +671,8 @@ export default function Estoque({ crud, onBack }) {
               type="search"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Buscar produto, código ou categoria..."
-              aria-label="Buscar produto, código ou categoria"
+              placeholder="Buscar produto ou código..."
+              aria-label="Buscar produto ou código"
             />
           </label>
           <select
@@ -653,7 +683,7 @@ export default function Estoque({ crud, onBack }) {
           >
             <option value="todos">Todos os status</option>
             <option value="critico">Crítico</option>
-            <option value="baixo">Abaixo do mínimo</option>
+            <option value="baixo">No mínimo</option>
             <option value="saudavel">Saudável</option>
           </select>
           <button
@@ -711,7 +741,6 @@ export default function Estoque({ crud, onBack }) {
                   <tr>
                     <th>ID / código</th>
                     <th>Produto</th>
-                    <th>Categoria</th>
                     <th>Saldo</th>
                     <th>Mínimo</th>
                     <th>Custo unit.</th>
@@ -724,8 +753,9 @@ export default function Estoque({ crud, onBack }) {
                     const health = saudeEstoque(produto);
                     const saldo = Number(produto.saldo ?? 0);
                     const minimum = saldoMinimo(produto);
+                    // A barra vai de 0 a 2x o mínimo: no mínimo ela fica pela metade.
                     const progress = minimum
-                      ? Math.min((saldo / minimum) * 100, 100)
+                      ? Math.min((saldo / (minimum * 2)) * 100, 100)
                       : saldo > 0
                         ? 100
                         : 0;
@@ -748,7 +778,6 @@ export default function Estoque({ crud, onBack }) {
                             </span>
                           </div>
                         </td>
-                        <td>{produto.categoria || "—"}</td>
                         <td className="catalog-number-cell">
                           <strong>{saldo}</strong> un.
                         </td>
@@ -833,7 +862,6 @@ export default function Estoque({ crud, onBack }) {
             </div>
             <dl className="catalog-detail-grid">
               <div><dt>ID / código</dt><dd>{codigoProduto(viewingProduct)}</dd></div>
-              <div><dt>Categoria</dt><dd>{viewingProduct.categoria || "Não informada"}</dd></div>
               <div><dt>Saldo atual</dt><dd>{viewingProduct.saldo ?? 0} un.</dd></div>
               <div><dt>Quantidade mínima</dt><dd>{saldoMinimo(viewingProduct)} un.</dd></div>
               <div><dt>Custo unitário</dt><dd>{formatarValor(viewingProduct.valorUnitario)}</dd></div>

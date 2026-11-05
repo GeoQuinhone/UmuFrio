@@ -669,3 +669,9 @@
     padding: 16px 13px;
   }
 }
+/* Fase 8: tipo de cliente (CPF/CNPJ) */
+.doc-tipo { display: flex; gap: 8px; grid-column: 1 / -1; }
+.doc-tipo-opcao { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid var(--line, #dfe7ec); border-radius: 999px; font-size: 12px; font-weight: 700; color: #536772; cursor: pointer; background: #fff; }
+.doc-tipo-opcao input { accent-color: #176b9d; }
+.doc-tipo-opcao.is-ativo { border-color: #176b9d; background: #eaf5fa; color: #12325b; }
+.doc-tipo-opcao.is-desabilitado { opacity: .6; cursor: not-allowed; }

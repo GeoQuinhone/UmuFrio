@@ -11,11 +11,13 @@ import {
   ErrorBanner,
 } from "../components/FormControls.jsx";
 import "./clients-users.css";
-import { mascaraCpf, mascaraTelefone, mascaraCep, cpfValido } from "../utils/mascaras.js";
+import { mascaraTelefone, mascaraCep, documentoValido, formatarDocumento, tipoDoDocumento } from "../utils/mascaras.js";
+import DocumentoCliente from "../components/DocumentoCliente.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 
 const FORM_VAZIO = {
   nome: "",
+  tipoPessoa: "PF",
   cpf: "",
   telefone: "",
   cep: "",
@@ -50,9 +52,7 @@ function displayValue(value) {
 }
 
 function formatCpf(cpf) {
-  const digits = somenteDigitos(cpf);
-  if (digits.length !== 11) return displayValue(cpf);
-  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+  return formatarDocumento(cpf);
 }
 
 function formatCep(cep) {
@@ -180,7 +180,7 @@ function ClientDetails({ cliente, onClose }) {
           </button>
         </div>
         <dl className="cu-detail-grid">
-          <div><dt>CPF</dt><dd>{formatCpf(cliente.cpf)}</dd></div>
+          <div><dt>{tipoDoDocumento(cliente.cpf) === "PJ" ? "CNPJ" : "CPF"}</dt><dd>{formatCpf(cliente.cpf)}</dd></div>
           <div><dt>Telefone</dt><dd>{displayValue(cliente.telefone)}</dd></div>
           <div><dt>CEP</dt><dd>{formatCep(cliente.cep)}</dd></div>
           <div><dt>Tipo de residência</dt><dd>{TIPO_RESIDENCIA_LABEL[cliente.tipoResidencia] || displayValue(cliente.tipoResidencia)}</dd></div>
@@ -241,7 +241,8 @@ export default function Clientes({ crud, onBack }) {
   function iniciarEdicao(cliente) {
     setForm({
       nome: cliente.nome || "",
-      cpf: cliente.cpf || "",
+      tipoPessoa: tipoDoDocumento(cliente.cpf),
+      cpf: formatarDocumento(cliente.cpf) === "—" ? "" : formatarDocumento(cliente.cpf),
       telefone: cliente.telefone || "",
       cep: cliente.cep || "",
       logradouro: cliente.logradouro || "",
@@ -288,9 +289,10 @@ export default function Clientes({ crud, onBack }) {
     if (!form.nome.trim()) novosErros.nome = "Informe o nome.";
 
     if (!editingId) {
-      if (!form.cpf.trim()) novosErros.cpf = "Informe o CPF.";
-      else if (!cpfValido(form.cpf)) {
-        novosErros.cpf = "CPF inválido.";
+      const rotuloDoc = form.tipoPessoa === "PJ" ? "CNPJ" : "CPF";
+      if (!form.cpf.trim()) novosErros.cpf = `Informe o ${rotuloDoc}.`;
+      else if (!documentoValido(form.cpf, form.tipoPessoa)) {
+        novosErros.cpf = `${rotuloDoc} inválido.`;
       }
     }
 
@@ -312,7 +314,7 @@ export default function Clientes({ crud, onBack }) {
         (cliente) => somenteDigitos(cliente.cpf) === somenteDigitos(form.cpf),
       );
       if (cpfDuplicado) {
-        novosErros.cpf = "Já existe um cliente cadastrado com este CPF.";
+        novosErros.cpf = `Já existe um cliente cadastrado com este ${form.tipoPessoa === "PJ" ? "CNPJ" : "CPF"}.`;
       }
     }
 
@@ -468,15 +470,13 @@ export default function Clientes({ crud, onBack }) {
                   placeholder="Nome completo"
                 />
               </Field>
-              <Field label="CPF" error={errors.cpf}>
-                <TextInput
-                  value={form.cpf}
-                  onChange={(event) => setForm({ ...form, cpf: mascaraCpf(event.target.value) })}
-                  placeholder="000.000.000-00"
-                  inputMode="numeric"
-                  disabled={Boolean(editingId)}
-                />
-              </Field>
+              <DocumentoCliente
+                tipo={form.tipoPessoa}
+                valor={form.cpf}
+                erro={errors.cpf}
+                disabled={Boolean(editingId)}
+                onChange={(parte) => setForm({ ...form, ...parte })}
+              />
               <Field label="Telefone" error={errors.telefone}>
                 <TextInput
                   value={form.telefone}
@@ -566,7 +566,7 @@ export default function Clientes({ crud, onBack }) {
               type="search"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Buscar cliente, CPF ou cidade..."
+              placeholder="Buscar cliente, CPF/CNPJ ou cidade..."
             />
           </label>
           <select

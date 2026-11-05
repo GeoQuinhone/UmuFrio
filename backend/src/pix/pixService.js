@@ -41,6 +41,9 @@ async function carregarOrdem(q, ordemId) {
             o.valor_cobrado AS "valorCobrado",
             o.observacao_pagamento AS "observacao",
             s.valor AS "servicoValor",
+            (SELECT COALESCE(SUM(m.quantidade * COALESCE(m.valor_unitario, p.valor_unitario)), 0)
+               FROM movimentacoes_estoque m JOIN produtos p ON p.id = m.produto_id
+              WHERE m.ordem_servico_id = o.id AND m.extra = 1)::float AS "extrasValor",
             s.nome AS "servicoNome",
             a.tecnico_id AS "tecnicoId",
             a.status AS "agendamentoStatus",
@@ -193,18 +196,20 @@ export async function criarCobranca(q, { ordemId, usuario }, deps = {}) {
     throw erroHttp("O pagamento deste atendimento já foi confirmado.", 409);
   }
 
-  const valor = Number(ordem.valorCobrado ?? ordem.servicoValor);
+  // Fase 8: o valor padrão do PIX é serviço + peças extras.
+  const esperado = Number(ordem.servicoValor) + Number(ordem.extrasValor || 0);
+  const valor = Number(ordem.valorCobrado ?? esperado);
 
   if (!Number.isFinite(valor) || emCentavos(valor) <= 0) {
     throw erroHttp("O valor a cobrar precisa ser maior que zero.", 400);
   }
 
   if (
-    emCentavos(valor) !== emCentavos(ordem.servicoValor) &&
+    emCentavos(valor) !== emCentavos(esperado) &&
     !String(ordem.observacao || "").trim()
   ) {
     throw erroHttp(
-      "O valor cobrado é diferente do valor do serviço. Informe o motivo na observação antes de gerar o PIX.",
+      "O valor cobrado é diferente do valor do serviço (mais peças extras). Informe o motivo na observação antes de gerar o PIX.",
       400,
     );
   }

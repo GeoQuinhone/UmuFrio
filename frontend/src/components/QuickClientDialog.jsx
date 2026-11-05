@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Field, TextInput, Select } from "./FormControls.jsx";
-import { mascaraCpf, mascaraTelefone, mascaraCep, cpfValido } from "../utils/mascaras.js";
+import { mascaraTelefone, mascaraCep, documentoValido } from "../utils/mascaras.js";
+import DocumentoCliente from "./DocumentoCliente.jsx";
 import "../pages/clients-users.css";
 
 const FORM_VAZIO = {
   nome: "",
+  tipoPessoa: "PF",
   cpf: "",
   telefone: "",
   cep: "",
@@ -110,15 +112,16 @@ export default function QuickClientDialog({ clientesExistentes = [], onClose, on
 
     if (!form.nome.trim()) novosErros.nome = "Informe o nome.";
 
-    if (!form.cpf.trim()) novosErros.cpf = "Informe o CPF.";
-    else if (!cpfValido(form.cpf)) novosErros.cpf = "CPF inválido.";
+    const rotuloDoc = form.tipoPessoa === "PJ" ? "CNPJ" : "CPF";
+    if (!form.cpf.trim()) novosErros.cpf = `Informe o ${rotuloDoc}.`;
+    else if (!documentoValido(form.cpf, form.tipoPessoa)) novosErros.cpf = `${rotuloDoc} inválido.`;
 
     if (!novosErros.cpf) {
       const cpfDuplicado = clientesExistentes.some(
         (cliente) => somenteDigitos(cliente.cpf) === somenteDigitos(form.cpf),
       );
       if (cpfDuplicado) {
-        novosErros.cpf = "Já existe um cliente cadastrado com este CPF.";
+        novosErros.cpf = `Já existe um cliente cadastrado com este ${rotuloDoc}.`;
       }
     }
 
@@ -217,14 +220,12 @@ export default function QuickClientDialog({ clientesExistentes = [], onClose, on
                 autoFocus
               />
             </Field>
-            <Field label="CPF" error={errors.cpf}>
-              <TextInput
-                value={form.cpf}
-                onChange={(event) => setForm({ ...form, cpf: mascaraCpf(event.target.value) })}
-                placeholder="000.000.000-00"
-                inputMode="numeric"
-              />
-            </Field>
+            <DocumentoCliente
+              tipo={form.tipoPessoa}
+              valor={form.cpf}
+              erro={errors.cpf}
+              onChange={(parte) => setForm({ ...form, ...parte })}
+            />
             <Field label="Telefone" error={errors.telefone}>
               <TextInput
                 value={form.telefone}

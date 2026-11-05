@@ -86,7 +86,7 @@ router.get(
 
 router.post(
   "/",
-  roles("ceo", "atendente"),
+  roles("ceo"),
   async (req, res, next) => {
     try {
       const {
@@ -161,7 +161,7 @@ router.post(
 // abertas com o valor antigo. Nome, descrição e peças continuam editáveis.
 router.put(
   "/:id",
-  roles("ceo", "atendente"),
+  roles("ceo"),
   async (req, res, next) => {
     try {
       const id = Number(req.params.id);
@@ -203,7 +203,7 @@ router.put(
 
 router.patch(
   "/:id/status",
-  roles("ceo", "atendente"),
+  roles("ceo"),
   async (req, res, next) => {
     try {
       const id = Number(req.params.id);
@@ -244,7 +244,7 @@ router.patch(
 
 router.put(
   "/:id/pecas",
-  roles("ceo", "atendente"),
+  roles("ceo"),
   async (req, res, next) => {
     try {
       const id = Number(req.params.id);

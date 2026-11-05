@@ -586,3 +586,8 @@
   font-size: 1.1rem;
   line-height: 1;
 }
+
+/* Fase 8: contato rápido com o cliente na lista de agendamentos */
+.schedule-contact { display: flex; align-items: center; gap: 8px; margin-top: 2px; font-weight: 600; }
+.schedule-contact a { color: #176b9d; text-decoration: none; }
+.schedule-whats-link { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #e3f6ec; color: #1b7a47 !important; }

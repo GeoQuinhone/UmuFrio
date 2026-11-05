@@ -1,0 +1,300 @@
+import "../loadEnv.js";
+import crypto from "node:crypto";
+import pg from "pg";
+
+import { PRODUTOS, SERVICOS, USUARIOS_BASE, VEICULOS } from "./seedAno/dados.js";
+import { cpfDe, gerarDados, somarDias } from "./seedAno/gerador.js";
+import { inserirLinhas, lit } from "./seedAno/sql.js";
+
+/*
+ * Seed anual: ~13 meses de histórico (de 1º do mês de 13 meses atrás até hoje)
+ * e agenda até 31/12 do ano corrente, com clientes, técnicos, atendimentos,
+ * pagamentos (dinheiro, PIX e cartão), estoque, check-ins e relatórios cheios.
+ *
+ *   npm run db:seed-ano            (só mostra o aviso)
+ *   npm run db:seed-ano -- --sim   (executa)
+ *
+ * ATENÇÃO: APAGA clientes, agendamentos, ordens de serviço, cobranças PIX,
+ * check-ins e movimentações de estoque do banco de DATABASE_URL e cria dados
+ * novos, tudo numa única transação (se algo falhar, nada é alterado). Usuários,
+ * serviços, produtos e veículos existentes são mantidos; os que faltarem são
+ * criados. Pode rodar de novo quando quiser: sempre recomeça do zero.
+ *
+ * Os dados usam semente fixa: o resultado é estável (clientes, serviços e a
+ * distribuição ao longo do ano); só o "agora" muda o que já aconteceu e o que
+ * ainda está por vir.
+ * SEED_TELEFONE_WHATSAPP (opcional) troca o telefone do cliente de teste do
+ * aviso por WhatsApp (Romário Rocha).
+ */
+
+const SENHA_DEMO = "Teste@123";
+const TELEFONE_WHATSAPP = process.env.SEED_TELEFONE_WHATSAPP || "(44) 99804-9224";
+
+function hashSenha(senha) {
+  const sal = crypto.randomBytes(16).toString("hex");
+  return `${sal}:${crypto.scryptSync(senha, sal, 64).toString("hex")}`;
+}
+
+const hojeEmBrasilia = (agora) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(agora);
+
+const q = async (client, texto) => (await client.query(texto)).rows;
+
+// ----------------------------------------------------------- base existente
+
+async function garantirUsuarios(client, hoje) {
+  const hash = hashSenha(SENHA_DEMO);
+  let sequencia = 0;
+
+  for (const u of USUARIOS_BASE) {
+    sequencia += 1;
+    const cpf = u.cpf || cpfDe(String(900000000 + sequencia * 7919).slice(0, 9));
+    await client.query(
+      `INSERT INTO usuarios (nome, email, cpf, senha_hash, telefone, perfil, ativo, primeiro_acesso)
+       VALUES (${lit(u.nome)}, ${lit(u.email)}, ${lit(cpf)}, ${lit(hash)}, ${lit(u.telefone)}, ${lit(u.perfil)}, 1, 0)
+       ON CONFLICT DO NOTHING`,
+    );
+  }
+
+  const ativos = await q(client, "SELECT id, email, perfil FROM usuarios WHERE ativo = 1 ORDER BY id");
+  const primeiro = (perfil) => ativos.find((u) => u.perfil === perfil)?.id;
+
+  const usuarios = {
+    ceoId: primeiro("ceo"),
+    atendenteId: primeiro("atendente"),
+    estoquistaId: primeiro("estoquista"),
+    tecnicos: ativos
+      .filter((u) => u.perfil === "tecnico")
+      .slice(0, 6)
+      .map((u) => ({
+        id: Number(u.id),
+        email: u.email,
+        // O técnico mais novo entrou há ~5 meses: aparece só nos meses recentes.
+        desde: u.email === "tecnico4@umufrio.com.br" ? somarDias(hoje, -150) : null,
+      })),
+  };
+
+  if (!usuarios.ceoId || !usuarios.atendenteId || !usuarios.estoquistaId || usuarios.tecnicos.length < 2) {
+    throw new Error("Faltam usuários (CEO, atendente, estoquista e 2 técnicos ativos).");
+  }
+  usuarios.ceoId = Number(usuarios.ceoId);
+  usuarios.atendenteId = Number(usuarios.atendenteId);
+  usuarios.estoquistaId = Number(usuarios.estoquistaId);
+  return usuarios;
+}
+
+async function garantirCatalogo(client) {
+  for (const p of PRODUTOS) {
+    await client.query(
+      `INSERT INTO produtos (nome, valor_unitario, saldo, quantidade_minima)
+       SELECT ${lit(p.nome)}, ${lit(p.valorUnitario)}, 0, ${lit(p.minimo)}
+        WHERE NOT EXISTS (SELECT 1 FROM produtos WHERE nome = ${lit(p.nome)})`,
+    );
+  }
+  const produtosDb = await q(client, "SELECT id, nome, valor_unitario, quantidade_minima FROM produtos");
+  const produtos = PRODUTOS.map((p) => {
+    const linha = produtosDb.find((x) => x.nome === p.nome);
+    return {
+      id: Number(linha.id),
+      chave: p.chave,
+      nome: p.nome,
+      valorUnitario: Number(linha.valor_unitario),
+      minimo: Number(linha.quantidade_minima),
+      lote: p.lote,
+      repDias: p.repDias,
+    };
+  });
+  const idProduto = Object.fromEntries(produtos.map((p) => [p.chave, p.id]));
+
+  for (const s of SERVICOS) {
+    await client.query(
+      `INSERT INTO servicos (nome, descricao, valor, ativo)
+       SELECT ${lit(s.nome)}, ${lit(s.descricao)}, ${lit(s.valor)}, ${lit(s.ativo ?? 1)}
+        WHERE NOT EXISTS (SELECT 1 FROM servicos WHERE nome = ${lit(s.nome)})`,
+    );
+  }
+  const servicosDb = await q(client, "SELECT id, nome, valor FROM servicos");
+
+  const servicos = [];
+  for (const s of SERVICOS) {
+    const linha = servicosDb.find((x) => x.nome === s.nome);
+    const servicoId = Number(linha.id);
+
+    for (const [chaveProduto, quantidade] of Object.entries(s.pecas)) {
+      await client.query(
+        `INSERT INTO servico_pecas (servico_id, produto_id, quantidade_necessaria)
+         SELECT ${servicoId}, ${idProduto[chaveProduto]}, ${quantidade}
+          WHERE NOT EXISTS (
+            SELECT 1 FROM servico_pecas WHERE servico_id = ${servicoId} AND produto_id = ${idProduto[chaveProduto]}
+          )`,
+      );
+    }
+
+    const pecas = (
+      await q(client, `SELECT produto_id, quantidade_necessaria FROM servico_pecas WHERE servico_id = ${servicoId}`)
+    ).map((p) => ({ produtoId: Number(p.produto_id), quantidade: Number(p.quantidade_necessaria) }));
+
+    servicos.push({ id: servicoId, chave: s.chave, nome: s.nome, valor: Number(linha.valor), pecas });
+  }
+
+  return { produtos, servicos };
+}
+
+async function garantirVeiculos(client, usuarios) {
+  let proximoTecnico = 0;
+  for (const v of VEICULOS) {
+    const tecnico = v.semTecnico ? null : usuarios.tecnicos[proximoTecnico++]?.id ?? null;
+    const condicaoTecnico = tecnico
+      ? `AND NOT EXISTS (SELECT 1 FROM veiculos WHERE tecnico_id = ${tecnico})`
+      : "";
+    await client.query(
+      `INSERT INTO veiculos (placa, marca, modelo, ano, tecnico_id, status)
+       SELECT ${lit(v.placa)}, ${lit(v.marca)}, ${lit(v.modelo)}, ${lit(v.ano)}, ${lit(tecnico)}, ${lit(v.status || "ativo")}
+        WHERE NOT EXISTS (SELECT 1 FROM veiculos WHERE placa = ${lit(v.placa)}) ${condicaoTecnico}`,
+    );
+  }
+}
+
+// ------------------------------------------------------------------ gravação
+
+function montarScript(dados) {
+  const colunas = {
+    clientes: ["id", "nome", "cpf", "telefone", "cep", "logradouro", "numero", "bairro", "cidade", "estado", "tipo_residencia", "complemento", "status", "inativado_em", "latitude", "longitude", "geo_endereco", "geocodificado_em"],
+    agendamentos: ["id", "cliente_id", "tecnico_id", "data", "hora", "status", "cancelado_em", "nao_realizado", "motivo_nao_realizado"],
+    ordens_servico: ["id", "agendamento_id", "servico_id", "status", "aberta_em", "iniciada_em", "concluida_em", "valor_cobrado", "forma_pagamento", "pagamento_confirmado", "pagamento_confirmado_em", "observacao_pagamento", "pagamento_usuario_id"],
+    cobrancas_pix: ["id", "ordem_id", "usuario_id", "valor", "status", "modo", "mp_payment_id", "referencia", "codigo_copia_cola", "qr_code_base64", "ticket_url", "criado_em", "expira_em", "aprovado_em"],
+    movimentacoes_estoque: ["id", "produto_id", "usuario_id", "ordem_servico_id", "tipo", "quantidade", "data", "extra"],
+    registros_localizacao: ["id", "ordem_id", "tipo", "usuario_id", "latitude", "longitude", "precisao_m", "distancia_m", "raio_m", "dentro_raio", "justificativa", "criado_em"],
+  };
+
+  const comandos = [
+    "TRUNCATE TABLE registros_localizacao, cobrancas_pix, movimentacoes_estoque, ordens_servico, agendamentos, clientes RESTART IDENTITY;",
+    ...inserirLinhas("clientes", colunas.clientes, dados.clientes),
+    ...inserirLinhas("agendamentos", colunas.agendamentos, dados.agendamentos),
+    ...inserirLinhas("ordens_servico", colunas.ordens_servico, dados.ordens),
+    ...inserirLinhas("cobrancas_pix", colunas.cobrancas_pix, dados.pix),
+    ...inserirLinhas("movimentacoes_estoque", colunas.movimentacoes_estoque, dados.movimentacoes),
+    ...inserirLinhas("registros_localizacao", colunas.registros_localizacao, dados.registros),
+  ];
+
+  for (const [id, saldo] of Object.entries(dados.saldos)) {
+    comandos.push(`UPDATE produtos SET saldo = ${lit(saldo)} WHERE id = ${lit(Number(id))};`);
+  }
+
+  // Como os ids foram gravados à mão, alinha as sequências para os próximos
+  // cadastros feitos pelo sistema não baterem em ids já usados.
+  for (const tabela of Object.keys(colunas)) {
+    comandos.push(
+      `SELECT setval(pg_get_serial_sequence('${tabela}', 'id'), COALESCE(MAX(id), 1), MAX(id) IS NOT NULL) FROM ${tabela};`,
+    );
+  }
+  return comandos.join("\n");
+}
+
+// -------------------------------------------------------------------- principal
+
+async function principal() {
+  const confirmou = process.argv.includes("--sim");
+
+  if (!process.env.DATABASE_URL) {
+    console.error("DATABASE_URL não definida. Configure o backend/.env.");
+    process.exitCode = 1;
+    return;
+  }
+
+  let servidor = "(endereço não identificado)";
+  try {
+    const url = new URL(process.env.DATABASE_URL);
+    servidor = `${url.hostname}${url.pathname}`;
+  } catch {
+    // mantém o texto padrão
+  }
+
+  if (!confirmou) {
+    console.log(
+      "Este comando APAGA clientes, agendamentos, ordens de serviço, cobranças PIX,\n" +
+        "check-ins e movimentações de estoque do banco abaixo e cria ~13 meses de dados\n" +
+        "de demonstração (agenda até 31/12). Usuários, serviços e produtos são mantidos.\n\n" +
+        `  Banco: ${servidor}\n\n` +
+        "Para confirmar, rode:\n\n  npm run db:seed-ano -- --sim\n",
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    console.error("Recusado: NODE_ENV=production. Use apenas em banco de teste ou demonstração.");
+    process.exitCode = 1;
+    return;
+  }
+
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
+  const client = await pool.connect();
+
+  try {
+    const [{ ok }] = await q(
+      client,
+      `SELECT (to_regclass('public.veiculos') IS NOT NULL
+           AND to_regclass('public.registros_localizacao') IS NOT NULL
+           AND to_regclass('public.cobrancas_pix') IS NOT NULL) AS ok`,
+    );
+    if (!ok) {
+      console.error("O banco ainda não tem todas as tabelas. Rode antes:  npm run db:migrate");
+      process.exitCode = 1;
+      return;
+    }
+
+    const [antes] = await q(
+      client,
+      `SELECT (SELECT count(*) FROM clientes)::int AS clientes,
+              (SELECT count(*) FROM agendamentos)::int AS agendamentos,
+              (SELECT count(*) FROM ordens_servico)::int AS ordens`,
+    );
+    console.log(`Banco: ${servidor}`);
+    console.log(
+      `Apagando ${antes.clientes} clientes, ${antes.agendamentos} agendamentos e ${antes.ordens} ordens de serviço existentes...`,
+    );
+
+    const agora = new Date();
+    const hoje = hojeEmBrasilia(agora);
+
+    const usuarios = await garantirUsuarios(client, hoje);
+    const { produtos, servicos } = await garantirCatalogo(client);
+    await garantirVeiculos(client, usuarios);
+
+    const dados = gerarDados({ hoje, agora, usuarios, servicos, produtos, telefoneWhatsapp: TELEFONE_WHATSAPP });
+    const script = montarScript(dados);
+
+    // Um único envio, uma única transação: ou entra tudo, ou nada.
+    await client.query(script);
+
+    const r = dados.resumo;
+    console.log("");
+    console.log(`Período: ${dados.periodo.inicio} a ${dados.periodo.fim} (hoje: ${dados.periodo.hoje})`);
+    console.log(`Clientes: ${r.clientes} (${r.clientesInativos} inativos)`);
+    console.log(
+      `Agendamentos: ${r.agendamentos} (${r.cancelados} cancelados, ${r.naoRealizados} não realizados)`,
+    );
+    console.log(`Ordens de serviço: ${r.ordens} ${JSON.stringify(r.ordensPorStatus)}`);
+    console.log(`Cobranças PIX: ${r.cobrancasPix} | Check-ins/outs: ${r.registrosLocalizacao} | Movimentações de estoque: ${r.movimentacoes}`);
+    console.log(`A receber: R$ ${r.aReceber.toFixed(2)}`);
+    console.log(`Abaixo do mínimo no estoque: ${r.abaixoDoMinimo.join("; ") || "nenhum"}`);
+    console.log("");
+    console.log("Faturamento por mês (pagamentos confirmados):");
+    for (const [mes, valor] of Object.entries(r.faturamentoPorMes)) {
+      console.log(`  ${mes}  R$ ${valor.toFixed(2)}`);
+    }
+    console.log("");
+    console.log(`Logins (senha ${SENHA_DEMO}), se não existirem foram criados:`);
+    for (const u of USUARIOS_BASE) console.log(`  ${u.perfil.padEnd(10)} ${u.email}`);
+    console.log(`Cliente para testar o WhatsApp: Romário Rocha, ${TELEFONE_WHATSAPP}`);
+  } catch (erro) {
+    console.error("Falha ao carregar os dados (nada foi alterado):", erro.message);
+    process.exitCode = 1;
+  } finally {
+    client.release();
+    await pool.end();
+  }
+}
+
+await principal();

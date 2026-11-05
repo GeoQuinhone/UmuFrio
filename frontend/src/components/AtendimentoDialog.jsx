@@ -11,9 +11,14 @@ import {
   formatDate,
   formatDateTime,
   formatMoeda,
+  linkLigacao,
+  linkWhatsappCliente,
   osCode,
   podeRegistrarPagamento,
+  valorDoAtendimento,
 } from "../utils/atendimento.js";
+import ProdutoSelect from "./ProdutoSelect.jsx";
+import { useAuth } from "../AuthContext.jsx";
 import "../pages/clients-users.css";
 import "./order-details.css";
 
@@ -57,7 +62,7 @@ function Timeline({ atendimento }) {
 
 // Peças extras (ponto 12): consumo de peças além das vinculadas ao serviço,
 // liberado enquanto o atendimento está em andamento.
-function PecasExtras({ ordemId, ordemStatus, produtosAtivos, onConsumo }) {
+function PecasExtras({ ordemId, ordemStatus, pago, produtosAtivos, onConsumo }) {
   const [pecas, setPecas] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [produtoId, setProdutoId] = useState("");
@@ -120,24 +125,32 @@ function PecasExtras({ ordemId, ordemStatus, produtosAtivos, onConsumo }) {
         <ul className="os-extra-parts-list">
           {pecas.map((peca) => (
             <li key={peca.id}>
-              {peca.quantidade}x {peca.produtoNome}
+              <span>{peca.quantidade}x {peca.produtoNome}</span>
+              {peca.valorUnitario !== null && peca.valorUnitario !== undefined && (
+                <strong>{formatMoeda(Number(peca.valorUnitario) * peca.quantidade)}</strong>
+              )}
             </li>
           ))}
         </ul>
       )}
 
-      {ordemStatus === "andamento" && (
+      {ordemStatus === "andamento" && pago && (
+        <p className="os-extra-parts-empty">
+          Pagamento confirmado: não é mais possível adicionar peças extras.
+        </p>
+      )}
+
+      {ordemStatus === "andamento" && !pago && (
         <form className="os-extra-parts-form" onSubmit={registrarConsumo}>
-          {erro && <p className="catalog-form-error" role="alert">{erro}</p>}
+          {erro && <p className="catalog-form-error os-extra-parts-error" role="alert">{erro}</p>}
           <Field label="Peça">
-            <Select value={produtoId} onChange={(event) => setProdutoId(event.target.value)}>
-              <option value="">Selecione...</option>
-              {produtosAtivos.map((produto) => (
-                <option key={produto.id} value={produto.id}>
-                  {produto.nome} (saldo: {produto.saldo})
-                </option>
-              ))}
-            </Select>
+            <ProdutoSelect
+              produtos={produtosAtivos}
+              value={produtoId}
+              onChange={setProdutoId}
+              mostrarMinimo={false}
+              exigirSaldo
+            />
           </Field>
           <Field label="Quantidade">
             <TextInput
@@ -145,12 +158,13 @@ function PecasExtras({ ordemId, ordemStatus, produtosAtivos, onConsumo }) {
               min="1"
               step="1"
               value={quantidade}
-              onChange={(event) => setQuantidade(event.target.value)}
+              onChange={(event) => setQuantidade(event.target.value.replace(/^0+(?=\d)/, ""))}
             />
           </Field>
-          <button type="submit" className="btn-ghost" disabled={salvando}>
+          <button type="submit" className="btn-ghost os-extra-parts-submit" disabled={salvando}>
             {salvando ? "Descontando..." : "Descontar do estoque"}
           </button>
+          <p className="os-extra-parts-hint">O valor das peças extras é somado ao pagamento do atendimento.</p>
         </form>
       )}
     </div>
@@ -159,7 +173,10 @@ function PecasExtras({ ordemId, ordemStatus, produtosAtivos, onConsumo }) {
 
 function Pagamento({ atendimento, perfil, onPagamento }) {
   const confirmado = Boolean(atendimento.pagamentoConfirmado);
+  // Fase 8: depois de pago, só o CEO vê o botão de alterar (o técnico e os demais
+  // perfis apenas consultam o resumo).
   const podeAlterar = !confirmado || perfil === "ceo";
+  const extras = Number(atendimento.extrasValor ?? 0);
 
   return (
     <div className="payment-summary">
@@ -173,8 +190,14 @@ function Pagamento({ atendimento, perfil, onPagamento }) {
       <dl className="payment-summary-grid">
         <div>
           <dt>Valor cobrado</dt>
-          <dd>{formatMoeda(atendimento.valorCobrado ?? atendimento.servicoValor)}</dd>
+          <dd>{formatMoeda(valorDoAtendimento(atendimento))}</dd>
         </div>
+        {extras > 0 && (
+          <div>
+            <dt>Inclui peças extras</dt>
+            <dd>{formatMoeda(extras)}</dd>
+          </div>
+        )}
         <div>
           <dt>Forma</dt>
           <dd>{formaPagamentoLabel(atendimento.formaPagamento)}</dd>
@@ -193,14 +216,16 @@ function Pagamento({ atendimento, perfil, onPagamento }) {
         )}
       </dl>
 
-      <button type="button" className="btn-ghost" onClick={onPagamento}>
-        <Icon name="wallet" size={15} />
-        {podeAlterar
-          ? confirmado
-            ? "Alterar pagamento"
-            : "Registrar pagamento"
-          : "Ver pagamento"}
-      </button>
+      {podeAlterar ? (
+        <button type="button" className="btn-ghost" onClick={onPagamento}>
+          <Icon name="wallet" size={15} />
+          {confirmado ? "Alterar pagamento" : "Registrar pagamento"}
+        </button>
+      ) : (
+        <p className="payment-hint">
+          Pagamento confirmado. Somente o CEO pode alterá-lo.
+        </p>
+      )}
     </div>
   );
 }
@@ -214,6 +239,7 @@ export default function AtendimentoDialog({
   onConsumoPecaExtra,
 }) {
   const dialogRef = useRef(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     const returnFocusTo = document.activeElement;
@@ -295,7 +321,28 @@ export default function AtendimentoDialog({
             <dt>Status atual</dt>
             <dd><Badge tone={estado.tone}>{estado.label}</Badge></dd>
           </div>
-          <div><dt>Telefone</dt><dd>{atendimento.clienteTelefone || "—"}</dd></div>
+          <div>
+            <dt>Telefone</dt>
+            <dd className="cu-phone">
+              <span>{atendimento.clienteTelefone || "—"}</span>
+              {!cancelado && linkLigacao(atendimento.clienteTelefone) && (
+                <a className="cu-contact-btn" href={linkLigacao(atendimento.clienteTelefone)} aria-label={`Ligar para ${atendimento.clienteNome}`}>
+                  Ligar
+                </a>
+              )}
+              {!cancelado && linkWhatsappCliente(atendimento, user?.nome) && (
+                <a
+                  className="cu-contact-btn cu-contact-whats"
+                  href={linkWhatsappCliente(atendimento, user?.nome)}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`Chamar ${atendimento.clienteNome} no WhatsApp`}
+                >
+                  <Icon name="whatsapp" size={13} /> WhatsApp
+                </a>
+              )}
+            </dd>
+          </div>
           <div className="cu-detail-wide"><dt>Endereço</dt><dd>{endereco || "—"}</dd></div>
         </dl>
 
@@ -337,6 +384,7 @@ export default function AtendimentoDialog({
             <PecasExtras
               ordemId={atendimento.ordemId}
               ordemStatus={atendimento.ordemStatus}
+              pago={Boolean(atendimento.pagamentoConfirmado)}
               produtosAtivos={produtosAtivos}
               onConsumo={onConsumoPecaExtra}
             />

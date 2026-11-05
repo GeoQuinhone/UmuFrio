@@ -85,3 +85,52 @@ export function cpfValido(valor) {
 
   return cpf.slice(9, 11) === `${digito1}${digito2}`;
 }
+
+// ---- Fase 8: cliente pode ser pessoa física (CPF) ou jurídica (CNPJ) ----
+
+// 00.000.000/0000-00
+export function mascaraCnpj(valor) {
+  const d = somenteDigitos(valor).slice(0, 14);
+  let r = d.slice(0, 2);
+  if (d.length > 2) r += `.${d.slice(2, 5)}`;
+  if (d.length > 5) r += `.${d.slice(5, 8)}`;
+  if (d.length > 8) r += `/${d.slice(8, 12)}`;
+  if (d.length > 12) r += `-${d.slice(12, 14)}`;
+  return r;
+}
+
+export function cnpjValido(valor) {
+  const cnpj = somenteDigitos(valor);
+  if (cnpj.length !== 14 || /^(\d)\1{13}$/.test(cnpj)) return false;
+  const digito = (base) => {
+    const pesos = base.length === 12
+      ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+      : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const soma = [...base].reduce((acc, n, i) => acc + Number(n) * pesos[i], 0);
+    const resto = soma % 11;
+    return resto < 2 ? 0 : 11 - resto;
+  };
+  const d1 = digito(cnpj.slice(0, 12));
+  const d2 = digito(cnpj.slice(0, 12) + d1);
+  return cnpj.slice(12, 14) === `${d1}${d2}`;
+}
+
+export function mascaraDocumento(valor, tipo = "PF") {
+  return tipo === "PJ" ? mascaraCnpj(valor) : mascaraCpf(valor);
+}
+
+export function documentoValido(valor, tipo = "PF") {
+  return tipo === "PJ" ? cnpjValido(valor) : cpfValido(valor);
+}
+
+// Formata um documento já salvo (só dígitos) conforme o tamanho.
+export function formatarDocumento(valor) {
+  const d = somenteDigitos(valor);
+  if (d.length === 14) return mascaraCnpj(d);
+  if (d.length === 11) return mascaraCpf(d);
+  return valor || "—";
+}
+
+export function tipoDoDocumento(valor) {
+  return somenteDigitos(valor).length === 14 ? "PJ" : "PF";
+}

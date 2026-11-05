@@ -13,6 +13,8 @@ import relatoriosRouter from "./routes/relatorios.js";
 import checkinRouter from "./routes/checkin.js";
 import chatRouter from "./routes/chat.js";
 import veiculosRouter from "./routes/veiculos.js";
+import despesasRouter from "./routes/despesas.js";
+import notificacoesRouter from "./routes/notificacoes.js";
 
 import { requireAuth } from "./security.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
@@ -58,6 +60,8 @@ app.use("/api/ordens-servico", checkinRouter);
 app.use("/api/produtos", produtosRouter);
 app.use("/api/relatorios", relatoriosRouter);
 app.use("/api/veiculos", veiculosRouter);
+app.use("/api/despesas", despesasRouter);
+app.use("/api/notificacoes", notificacoesRouter);
 
 app.use(notFound);
 app.use(errorHandler);
