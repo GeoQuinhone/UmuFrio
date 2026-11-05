@@ -273,13 +273,6 @@ export default function Login() {
                 </button>
               </span>
             </label>
-            <button
-              type="button"
-              className="auth-forgot"
-              onClick={abrirRecuperacao}
-            >
-              Esqueci minha senha
-            </button>
             <button className="auth-primary" type="submit" disabled={loading}>
               {loading ? "Entrando..." : "Entrar no painel"}
             </button>
