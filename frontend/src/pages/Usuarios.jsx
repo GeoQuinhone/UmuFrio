@@ -23,7 +23,6 @@ const FORM_VAZIO = {
 };
 
 const PERFIL_LABEL = {
-  ceo: "CEO",
   atendente: "Atendente",
   estoquista: "Estoquista",
   tecnico: "Técnico",
