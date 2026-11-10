@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import Layout from "../components/Layout.jsx";
 import Icon from "../components/Icon.jsx";
@@ -6,7 +6,8 @@ import { Field, TextInput, Select, EmptyState, ErrorBanner } from "../components
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import { useApiCrud } from "../hooks/useApiCrud.js";
 import { mascaraMoeda, moedaParaNumero } from "../utils/mascaras.js";
-import { CATEGORIAS_DESPESA, categoriaLabel } from "../utils/despesas.js";
+import { CATEGORIAS_DESPESA, categoriaLabel, CATEGORIAS_COM_VEICULO, CATEGORIAS_COM_FUNCIONARIO, rotuloVeiculo } from "../utils/despesas.js";
+import { cargoLabel } from "../utils/cargo.js";
 import { formatDate, formatMoeda } from "../utils/atendimento.js";
 import "./catalog-stock.css";
 import "./despesas.css";
@@ -20,13 +21,20 @@ function hojeISO() {
   return `${d.getFullYear()}-${dois(d.getMonth() + 1)}-${dois(d.getDate())}`;
 }
 
-const FORM_VAZIO = () => ({ descricao: "", categoria: "combustivel", valor: "", data: hojeISO(), observacao: "" });
+const FORM_VAZIO = () => ({ descricao: "", categoria: "combustivel", valor: "", data: hojeISO(), observacao: "", veiculoId: "", funcionarioId: "" });
 
 export default function Despesas({ onBack }) {
   const { confirm, confirmElement } = useConfirm();
   const crud = useApiCrud("/despesas");
   const { items, loading, error, add, update, remove } = crud;
   const despesas = Array.isArray(items) ? items : [];
+
+  // Fase 9: listas para vincular a despesa a um veículo ou a um funcionário.
+  const veiculosCrud = useApiCrud("/veiculos");
+  const usuariosCrud = useApiCrud("/usuarios");
+  const listaVeiculos = (Array.isArray(veiculosCrud.items) ? veiculosCrud.items : []).filter((v) => v.status !== "inativo");
+  const listaFuncionarios = (Array.isArray(usuariosCrud.items) ? usuariosCrud.items : []).filter((u) => Number(u.ativo) === 1);
+  const formRef = useRef(null);
 
   const [mes, setMes] = useState(hojeISO().slice(0, 7));
   const [categoria, setCategoria] = useState("");
@@ -55,6 +63,14 @@ export default function Despesas({ onBack }) {
     return [...mapa.entries()].sort((a, b) => b[1] - a[1]);
   }, [filtradas]);
 
+  useEffect(() => {
+    if (!showForm) return undefined;
+    const t = setTimeout(() => {
+      formRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    }, 30);
+    return () => clearTimeout(t);
+  }, [showForm, editingId]);
+
   function novo() {
     setEditingId(null);
     setForm(FORM_VAZIO());
@@ -70,6 +86,8 @@ export default function Despesas({ onBack }) {
       valor: mascaraMoeda(String(Math.round(Number(d.valor) * 100))),
       data: String(d.data).slice(0, 10),
       observacao: d.observacao || "",
+      veiculoId: d.veiculoId ? String(d.veiculoId) : "",
+      funcionarioId: d.funcionarioId ? String(d.funcionarioId) : "",
     });
     setErros({});
     setShowForm(true);
@@ -98,6 +116,8 @@ export default function Despesas({ onBack }) {
       valor,
       data: form.data,
       observacao: form.observacao.trim(),
+      veiculoId: CATEGORIAS_COM_VEICULO.includes(form.categoria) && form.veiculoId ? Number(form.veiculoId) : null,
+      funcionarioId: CATEGORIAS_COM_FUNCIONARIO.includes(form.categoria) && form.funcionarioId ? Number(form.funcionarioId) : null,
     };
     try {
       if (editingId) await update(editingId, payload);
@@ -142,7 +162,7 @@ export default function Despesas({ onBack }) {
           <ErrorBanner message={error || banner} onClose={() => setBanner("")} />
 
           {showForm && (
-            <form className="catalog-form-card" onSubmit={salvar}>
+            <form ref={formRef} className="catalog-form-card" onSubmit={salvar}>
               <div className="catalog-form-heading">
                 <div>
                   <span className="catalog-eyebrow">GASTOS</span>
@@ -155,12 +175,36 @@ export default function Despesas({ onBack }) {
                   <TextInput value={form.descricao} maxLength={150} onChange={(e) => setForm({ ...form, descricao: e.target.value })} placeholder="Ex.: Diesel da van" />
                 </Field>
                 <Field label="Categoria">
-                  <Select value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })}>
+                  <Select value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value, veiculoId: "", funcionarioId: "" })}>
                     {CATEGORIAS_DESPESA.map((c) => (
                       <option key={c.value} value={c.value}>{c.label}</option>
                     ))}
                   </Select>
                 </Field>
+                {CATEGORIAS_COM_VEICULO.includes(form.categoria) && (
+                  <Field label="Veículo (opcional)">
+                    <Select value={form.veiculoId} onChange={(e) => setForm({ ...form, veiculoId: e.target.value })}>
+                      <option value="">Sem veículo (gasto geral)</option>
+                      {listaVeiculos.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {rotuloVeiculo(v)}{v.tecnicoNome ? ` · ${v.tecnicoNome}` : ""}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                )}
+                {CATEGORIAS_COM_FUNCIONARIO.includes(form.categoria) && (
+                  <Field label="Funcionário (opcional)">
+                    <Select value={form.funcionarioId} onChange={(e) => setForm({ ...form, funcionarioId: e.target.value })}>
+                      <option value="">Sem funcionário (folha geral)</option>
+                      {listaFuncionarios.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.nome} — {cargoLabel(u.perfil)}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                )}
                 <Field label="Valor (R$)" error={erros.valor}>
                   <TextInput inputMode="numeric" placeholder="0,00" value={form.valor} onChange={(e) => setForm({ ...form, valor: mascaraMoeda(e.target.value) })} />
                 </Field>
@@ -239,7 +283,11 @@ export default function Despesas({ onBack }) {
                           <strong className="catalog-primary-cell">{d.descricao}</strong>
                           {d.observacao && <small className="despesa-obs">{d.observacao}</small>}
                         </td>
-                        <td>{categoriaLabel(d.categoria)}</td>
+                        <td>
+                          {categoriaLabel(d.categoria)}
+                          {d.veiculoPlaca && <small className="despesa-obs">Veículo: {d.veiculoModelo} — {d.veiculoPlaca}</small>}
+                          {d.funcionarioNome && <small className="despesa-obs">Funcionário: {d.funcionarioNome}</small>}
+                        </td>
                         <td className="catalog-number-cell"><strong>{formatMoeda(d.valor)}</strong></td>
                         <td className="catalog-row-actions">
                           <button type="button" className="catalog-icon-button" aria-label={`Editar ${d.descricao}`} title="Editar" onClick={() => editar(d)}>

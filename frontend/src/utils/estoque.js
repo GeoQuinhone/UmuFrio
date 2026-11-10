@@ -17,3 +17,7 @@ export function moedaProduto(valor) {
   const n = Number(valor);
   return Number.isFinite(n) ? moeda.format(n) : "—";
 }
+
+// Fase 9: mesmos limites do back-end (backend/src/estoqueRegras.js).
+export const LIMITE_QUANTIDADE = 200;
+export const LIMITE_VALOR_UNITARIO = 50000;

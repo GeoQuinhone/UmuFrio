@@ -276,6 +276,11 @@ export const migrations = [
      lida_em timestamptz
    );
    CREATE INDEX IF NOT EXISTS ix_notificacoes_criada ON notificacoes (criada_em DESC)`,
+  // Fase 9: despesa vinculada a veículo (combustível, manutenção) ou funcionário (salários).
+  `ALTER TABLE despesas ADD COLUMN IF NOT EXISTS veiculo_id integer REFERENCES veiculos(id) ON DELETE SET NULL;
+   ALTER TABLE despesas ADD COLUMN IF NOT EXISTS funcionario_id integer REFERENCES usuarios(id) ON DELETE SET NULL;
+   CREATE INDEX IF NOT EXISTS ix_despesas_veiculo ON despesas (veiculo_id) WHERE veiculo_id IS NOT NULL;
+   CREATE INDEX IF NOT EXISTS ix_despesas_funcionario ON despesas (funcionario_id) WHERE funcionario_id IS NOT NULL`,
 ];
 
 export async function runMigrations(client) {

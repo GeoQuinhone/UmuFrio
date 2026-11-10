@@ -15,6 +15,7 @@ import {
   validId,
 } from "../security.js";
 import { avisarEstoque } from "../notificacoes.js";
+import { LIMITE_QUANTIDADE, LIMITE_VALOR_UNITARIO, quantidadeDentroDoLimite } from "../estoqueRegras.js";
 
 const router = Router();
 
@@ -145,6 +146,21 @@ router.post(
         });
       }
 
+      if (
+        !quantidadeDentroDoLimite(saldo) ||
+        !quantidadeDentroDoLimite(quantidadeMinima)
+      ) {
+        return res.status(400).json({
+          error: `Saldo e quantidade mínima devem ficar entre 0 e ${LIMITE_QUANTIDADE} unidades.`,
+        });
+      }
+
+      if (Number(valorUnitario) > LIMITE_VALOR_UNITARIO) {
+        return res.status(400).json({
+          error: "Valor unitário acima do limite permitido.",
+        });
+      }
+
       const [produto] = await db
         .insert(produtos)
         .values({
@@ -186,6 +202,18 @@ router.put(
       ) {
         return res.status(400).json({
           error: "Dados do produto inválidos.",
+        });
+      }
+
+      if (!quantidadeDentroDoLimite(quantidadeMinima)) {
+        return res.status(400).json({
+          error: `A quantidade mínima deve ficar entre 0 e ${LIMITE_QUANTIDADE} unidades.`,
+        });
+      }
+
+      if (Number(valorUnitario) > LIMITE_VALOR_UNITARIO) {
+        return res.status(400).json({
+          error: "Valor unitário acima do limite permitido.",
         });
       }
 
@@ -234,6 +262,12 @@ async function movimentarEstoque(
       });
     }
 
+    if (quantidade > LIMITE_QUANTIDADE) {
+      return res.status(400).json({
+        error: `Cada lançamento aceita no máximo ${LIMITE_QUANTIDADE} unidades.`,
+      });
+    }
+
     const resultado = await db.transaction(
       async (tx) => {
         const condicao =
@@ -242,7 +276,10 @@ async function movimentarEstoque(
                 eq(produtos.id, id),
                 sql`${produtos.saldo} >= ${quantidade}`,
               )
-            : eq(produtos.id, id);
+            : and(
+                eq(produtos.id, id),
+                sql`${produtos.saldo} + ${quantidade} <= ${LIMITE_QUANTIDADE}`,
+              );
 
         const [atualizado] = await tx
           .update(produtos)
@@ -270,7 +307,7 @@ async function movimentarEstoque(
           const error = new Error(
             tipo === "saida"
               ? "Saldo insuficiente ou alterado. Tente novamente."
-              : "O produto foi alterado. Tente novamente.",
+              : `Limite de ${LIMITE_QUANTIDADE} unidades por produto: o saldo ficaria acima do permitido.`,
           );
 
           error.status = 409;

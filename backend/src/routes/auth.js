@@ -2,6 +2,7 @@ import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, pool } from "../db/client.js";
 import { usuarios } from "../db/schema.js";
+import { nomePessoaValido } from "../validacoes.js";
 import {
   hashPassword,
   onlyDigits,
@@ -128,7 +129,7 @@ router.post("/bootstrap", async (req, res, next) => {
     const senha = String(req.body.senha || "");
 
     if (
-      !nome ||
+      !nomePessoaValido(nome) ||
       !email ||
       !cpfValido(cpf) ||
       !telefone ||
@@ -138,7 +139,7 @@ router.post("/bootstrap", async (req, res, next) => {
 
       return res.status(400).json({
         error:
-          "Informe nome, e-mail, CPF válido, telefone e senha com no mínimo 6 caracteres.",
+          "Informe nome (só letras), e-mail, CPF válido, telefone e senha com no mínimo 6 caracteres.",
       });
     }
 

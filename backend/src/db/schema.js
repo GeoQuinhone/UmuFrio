@@ -153,6 +153,9 @@ export const despesas = pgTable("despesas", {
   data: date("data").notNull(),
   observacao: varchar("observacao", { length: 255 }),
   usuarioId: integer("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+  // Fase 9: vínculo opcional com veículo (combustível, manutenção) ou funcionário (salários).
+  veiculoId: integer("veiculo_id"),
+  funcionarioId: integer("funcionario_id"),
   criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
 });
 

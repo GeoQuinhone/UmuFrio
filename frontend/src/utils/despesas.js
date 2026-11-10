@@ -12,3 +12,13 @@ export const CATEGORIAS_DESPESA = [
 export function categoriaLabel(valor) {
   return CATEGORIAS_DESPESA.find((c) => c.value === valor)?.label || valor || "—";
 }
+
+// Fase 9: combustível e manutenção podem ser vinculados a um veículo; salários, a um funcionário.
+export const CATEGORIAS_COM_VEICULO = ["combustivel", "manutencao"];
+export const CATEGORIAS_COM_FUNCIONARIO = ["salarios"];
+
+export function rotuloVeiculo(v) {
+  if (!v) return "";
+  const nome = [v.marca, v.modelo].filter(Boolean).join(" ") || v.modelo || "Veículo";
+  return `${nome} — ${v.placa}`;
+}

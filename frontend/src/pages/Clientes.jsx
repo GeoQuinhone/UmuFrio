@@ -11,6 +11,8 @@ import {
   ErrorBanner,
 } from "../components/FormControls.jsx";
 import "./clients-users.css";
+import { UFS, ufValida, nomeClienteValido, numeroImovelValido, filtrarNomePessoa, filtrarRazaoSocial, filtrarNumeroImovel } from "../utils/validacoes.js";
+
 import { mascaraTelefone, mascaraCep, documentoValido, formatarDocumento, tipoDoDocumento } from "../utils/mascaras.js";
 import DocumentoCliente from "../components/DocumentoCliente.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
@@ -286,7 +288,12 @@ export default function Clientes({ crud, onBack }) {
   function validar() {
     const novosErros = {};
 
-    if (!form.nome.trim()) novosErros.nome = "Informe o nome.";
+    if (!form.nome.trim()) novosErros.nome = form.tipoPessoa === "PJ" ? "Informe a razão social." : "Informe o nome.";
+    else if (!nomeClienteValido(form.nome, form.tipoPessoa)) {
+      novosErros.nome = form.tipoPessoa === "PJ"
+        ? "Use apenas letras, números e & . - / , ( )."
+        : "O nome deve ter apenas letras (sem números).";
+    }
 
     if (!editingId) {
       const rotuloDoc = form.tipoPessoa === "PJ" ? "CNPJ" : "CPF";
@@ -303,10 +310,11 @@ export default function Clientes({ crud, onBack }) {
     }
     if (!form.logradouro.trim()) novosErros.logradouro = "Informe o logradouro.";
     if (!form.numero.trim()) novosErros.numero = "Informe o número.";
+    else if (!numeroImovelValido(form.numero)) novosErros.numero = "Use somente números (até 6 dígitos).";
     if (!form.bairro.trim()) novosErros.bairro = "Informe o bairro.";
     if (!form.cidade.trim()) novosErros.cidade = "Informe a cidade.";
-    if (!/^[A-Za-z]{2}$/.test(form.estado.trim())) {
-      novosErros.estado = "UF com 2 letras.";
+    if (!ufValida(form.estado)) {
+      novosErros.estado = "Selecione um estado válido.";
     }
 
     if (!editingId && !novosErros.cpf) {
@@ -338,6 +346,7 @@ export default function Clientes({ crud, onBack }) {
       cidade: form.cidade.trim(),
       estado: form.estado.trim().toUpperCase(),
       tipoResidencia: form.tipoResidencia,
+      tipoPessoa: form.tipoPessoa,
     };
 
     try {
@@ -466,8 +475,8 @@ export default function Clientes({ crud, onBack }) {
               <Field label="Nome" error={errors.nome}>
                 <TextInput
                   value={form.nome}
-                  onChange={(event) => setForm({ ...form, nome: event.target.value })}
-                  placeholder="Nome completo"
+                  onChange={(event) => setForm({ ...form, nome: form.tipoPessoa === "PJ" ? filtrarRazaoSocial(event.target.value) : filtrarNomePessoa(event.target.value) })}
+                  placeholder={form.tipoPessoa === "PJ" ? "Razão social" : "Nome completo (só letras)"}
                 />
               </Field>
               <DocumentoCliente
@@ -504,7 +513,9 @@ export default function Clientes({ crud, onBack }) {
               <Field label="Número" error={errors.numero}>
                 <TextInput
                   value={form.numero}
-                  onChange={(event) => setForm({ ...form, numero: event.target.value })}
+                  onChange={(event) => setForm({ ...form, numero: filtrarNumeroImovel(event.target.value) })}
+                  inputMode="numeric"
+                  maxLength={6}
                   placeholder="Nº"
                 />
               </Field>
@@ -528,12 +539,15 @@ export default function Clientes({ crud, onBack }) {
                 />
               </Field>
               <Field label="UF" error={errors.estado}>
-                <TextInput
-                  value={form.estado}
-                  onChange={(event) => setForm({ ...form, estado: event.target.value.toUpperCase() })}
-                  placeholder="PR"
-                  maxLength={2}
-                />
+                <Select
+                value={form.estado}
+                onChange={(event) => setForm({ ...form, estado: event.target.value })}
+              >
+                <option value="">UF</option>
+                {UFS.map((uf) => (
+                  <option key={uf} value={uf}>{uf}</option>
+                ))}
+              </Select>
               </Field>
               <Field label="Tipo de residência">
                 <Select

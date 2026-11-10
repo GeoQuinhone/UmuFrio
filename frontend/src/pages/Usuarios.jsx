@@ -12,6 +12,7 @@ import {
 import "./clients-users.css";
 import { mascaraCpf, mascaraTelefone, cpfValido } from "../utils/mascaras.js";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
+import { nomePessoaValido, filtrarNomePessoa } from "../utils/validacoes.js";
 
 const FORM_VAZIO = {
   nome: "",
@@ -276,6 +277,8 @@ export default function Usuarios({ crud, onBack }) {
 
     if (!form.nome.trim()) {
       novosErros.nome = "Informe o nome.";
+    } else if (!nomePessoaValido(form.nome)) {
+      novosErros.nome = "O nome deve ter apenas letras (sem números).";
     }
 
     if (!editingId && !form.cpf.trim()) {
@@ -472,9 +475,9 @@ export default function Usuarios({ crud, onBack }) {
                 <TextInput
                   value={form.nome}
                   onChange={(event) =>
-                    setForm({ ...form, nome: event.target.value })
+                    setForm({ ...form, nome: filtrarNomePessoa(event.target.value) })
                   }
-                  placeholder="Nome completo"
+                  placeholder="Nome completo (só letras)"
                 />
               </Field>
               <Field label="CPF" error={errors.cpf}>
