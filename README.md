@@ -1,8 +1,11 @@
 # UmuFrio
 
 Sistema web para apoiar a gestão de uma empresa de manutenção de ar-condicionado
-e refrigeração. Reúne clientes, serviços, estoque, agendamentos e ordens de
-serviço em uma aplicação com frontend React, API Node.js e banco PostgreSQL.
+e refrigeração. Reúne clientes, serviços, estoque, agendamentos, ordens de
+serviço, veículos, despesas e relatórios em uma aplicação com frontend React,
+API Node.js e banco PostgreSQL.
+
+Publicação (Cloudflare Pages, Render e Neon): veja [DEPLOY.md](DEPLOY.md).
 
 Projeto de TCC do curso de Tecnologia em Sistemas para Internet (UniALFA).
 
@@ -22,9 +25,14 @@ Projeto de TCC do curso de Tecnologia em Sistemas para Internet (UniALFA).
 
 ### Clientes
 
-- Cadastro com CPF validado pelo dígito verificador, telefone, CEP com
+- Cliente **pessoa física (CPF)** ou **pessoa jurídica (CNPJ)**; o documento é
+  validado pelos dígitos verificadores e não pode se repetir. Telefone, CEP com
   preenchimento automático do endereço (ViaCEP) e tipo de residência.
-- Máscaras automáticas de CPF, telefone e CEP nos formulários.
+- Validações de cadastro (front e back-end): o nome de pessoa física não aceita
+  números (a razão social de pessoa jurídica aceita números e `& . - / , ( )`);
+  o número do imóvel aceita só dígitos (até 6); a UF é escolhida entre os 27
+  estados.
+- Máscaras automáticas de CPF/CNPJ, telefone e CEP nos formulários.
 - Ativação e inativação, preservando o histórico.
 - Cadastro rápido de cliente direto na tela de Agendamentos.
 
@@ -32,6 +40,8 @@ Projeto de TCC do curso de Tecnologia em Sistemas para Internet (UniALFA).
 
 - Cadastro com valor (máscara monetária) e peças necessárias, com a quantidade
   de cada uma.
+- Somente o `ceo` cadastra, edita, inativa e exclui serviços; o atendente só
+  consulta o catálogo para agendar.
 - O valor de um serviço não é editado depois de criado. Se o preço mudar, o
   serviço antigo é inativado e um novo é cadastrado, preservando o histórico das
   ordens já abertas.
@@ -39,9 +49,45 @@ Projeto de TCC do curso de Tecnologia em Sistemas para Internet (UniALFA).
 ### Estoque
 
 - Cadastro e edição de produtos com valor unitário (máscara monetária), saldo e
-  quantidade mínima.
+  quantidade mínima. Na edição o saldo é só leitura: ele muda por movimentação.
+- Botões **Novo produto** e **Registrar movimentação** no topo da tela; ao
+  clicar em editar, a tela rola até o formulário.
 - Entradas e saídas, sem permitir saída acima do saldo.
-- Alertas de estoque mínimo.
+- **Limite de 200 unidades** por produto (saldo inicial, mínimo, cada lançamento
+  e saldo após uma entrada) e valor unitário até R$ 50.000. Para ajustar, altere
+  `LIMITE_QUANTIDADE` em `backend/src/estoqueRegras.js` e em
+  `frontend/src/utils/estoque.js`.
+- Regra única de alerta: o produto é "no mínimo" quando saldo ≤ mínimo e
+  "zerado" quando o saldo é 0 (a mesma regra vale no estoque, nos relatórios e
+  nas notificações).
+- O produto é escolhido em um seletor com busca que mostra saldo, mínimo e valor
+  unitário.
+
+### Veículos
+
+- Cadastro de veículos (placa, marca, modelo, ano), técnico responsável e
+  situação (ativo, em manutenção ou inativo). Só o veículo ativo aparece no
+  atendimento do técnico.
+
+### Despesas e lucro real (somente CEO)
+
+- Tela **Despesas** (`/despesas`): descrição, categoria (combustível, salários e
+  encargos, aluguel e contas, manutenção de veículos, ferramentas e
+  equipamentos, marketing, impostos e taxas, outros), valor, data e observação,
+  com filtro por categoria/mês e total do período.
+- **Combustível** e **manutenção de veículos** podem ser vinculados a um veículo;
+  **salários** podem ser vinculados a um funcionário (campos opcionais).
+- O relatório de faturamento mostra o **lucro real** do período (regime de
+  caixa): recebido − custo das peças − despesas.
+
+### Notificações (sino)
+
+- O sino do topo reúne, para o `ceo`, os avisos de estoque no mínimo ou zerado,
+  atendimento iniciado, concluído (com alerta de pagamento pendente), não
+  realizado e cancelado, além das pendências ao vivo (pagamentos pendentes e
+  estoque crítico). Atualiza a cada 30 segundos e permite marcar como lidas.
+- O técnico recebe, no sino e em uma faixa na tela, o aviso de atendimento a até
+  60 minutos do horário (calculado no navegador).
 
 ### Agendamentos e ordens de serviço (fluxo único)
 
@@ -79,10 +125,13 @@ ao agendar, escolhe-se também o serviço e o sistema já cria a OS vinculada.
 - Campos: **valor cobrado** (nasce igual ao valor do serviço e pode ser
   alterado), **forma de pagamento** (dinheiro, PIX, cartão de débito ou
   crédito), **pagamento confirmado** e **observação**.
-- Se o valor cobrado for diferente do valor do serviço, a observação com o motivo
+- O valor esperado é o valor do serviço **mais as peças extras** lançadas no
+  atendimento (cada uma pelo preço unitário gravado na movimentação).
+- Se o valor cobrado for diferente do valor esperado, a observação com o motivo
   é obrigatória.
 - Para confirmar o pagamento é preciso informar a forma de pagamento.
-- Depois de confirmado, somente o `ceo` pode alterar o pagamento.
+- Depois de confirmado, somente o `ceo` pode alterar o pagamento (o técnico deixa
+  de ver o botão e a API recusa).
 - Por padrão o atendimento pode ser concluído com o pagamento pendente (a tela
   avisa). Para exigir o pagamento confirmado antes de concluir, defina
   `EXIGIR_PAGAMENTO_PARA_CONCLUIR=true` no `.env` do backend.
@@ -122,7 +171,10 @@ ao agendar, escolhe-se também o serviço e o sistema já cria a OS vinculada.
 
 Tela **Relatórios** (`/relatorios`), com filtro de período (mês atual, mês
 anterior, últimos 30 dias, ano atual ou datas livres; máximo de 366 dias) e
-quatro abas. Cada aba mostra o critério de cálculo e exporta **CSV** (separador
+quatro abas. A aba Faturamento compara com o período anterior, mostra gastos e
+lucro e lista quem já pagou e quem falta pagar; na aba Atendimentos, ao clicar
+em uma situação ou motivo, a tela lista os atendimentos correspondentes. Cada
+aba mostra o critério de cálculo e exporta **CSV** (separador
 `;`, decimal com vírgula e acentos corretos no Excel) e **PDF**.
 
 **PDF (Fase 6):** os botões "PDF desta aba" e "PDF completo" geram o arquivo no
@@ -164,13 +216,19 @@ chegada (**check-in**) e a saída (**check-out**) usando a localização do apar
   raio e sem referência.
 - O navegador só libera a localização em **HTTPS** (ou `localhost`).
 
-### Chat de atendimento na tela de login
+### Página institucional e chat de atendimento
 
-Botão "Fale conosco" na tela de login, aberto a visitantes (sem login). Informa
+Sem login, `/` abre a página **"Quem somos"** (missão, visão, valores e
+serviços), com a seção "Fale conosco" (chat com IA e WhatsApp). O login fica em
+`/login`, pelo botão "Área da equipe". A página também fica disponível em
+`/sobre`.
+
+Botão "Fale conosco" aberto a visitantes (sem login). Informa
 sobre serviços, horário e formas de pagamento e **encaminha para o WhatsApp**;
 não coleta dados nem agenda.
 
-- **IA de verdade:** com `ANTHROPIC_API_KEY` definida, o assistente usa a API da
+- **IA de verdade:** com `GROQ_API_KEY` (gratuito) ou `ANTHROPIC_API_KEY`
+  definida, o assistente usa a API da
   Anthropic (modelo em `CHAT_MODELO`) e responde só com base nos serviços,
   horário e formas de pagamento da empresa.
 - **Sem a chave, ou se a IA falhar:** o chat não inventa resposta. Ele avisa que
@@ -193,6 +251,9 @@ gostaria de atendimento." Para trocar o número, defina `CHAT_WHATSAPP` no `.env
 
 - Confirmações de exclusão e cancelamento em modal próprio, com foco preso e
   fechamento por `Esc`.
+- O cabeçalho mostra o cargo de quem está logado (CEO, Atendente, Técnico ou
+  Estoquista), o sino de notificações e "Sessão ativa".
+- O técnico vê o telefone do cliente com atalhos **Ligar** e **WhatsApp**.
 - Navegação por URL (React Router): cada módulo tem endereço próprio, funciona
   com os botões voltar e avançar do navegador e permite abrir um link direto.
 
@@ -201,14 +262,18 @@ gostaria de atendimento." Para trocar o número, defina `CHAT_WHATSAPP` no `.env
 | `/` | Início (painel) |
 | `/clientes` | Clientes |
 | `/usuarios` | Usuários (somente `ceo`) |
-| `/servicos` | Serviços |
+| `/servicos` | Serviços (somente `ceo`) |
 | `/estoque` | Estoque |
+| `/despesas` | Despesas e lucro (somente `ceo`) |
 | `/relatorios` | Relatórios (somente `ceo`) |
 | `/agendamentos` | Lista de agendamentos e ordens |
 | `/agendamentos/novo` | Novo agendamento |
 | `/agendamentos/12` | Detalhes do atendimento 12 |
 | `/agendamentos/12/editar` | Edição do atendimento 12 |
 | `/agendamentos/12/pagamento` | Pagamento do atendimento 12 |
+| `/` (sem login) | Página "Quem somos" |
+| `/sobre` | Página "Quem somos" (pública) |
+| `/login` | Entrada no sistema |
 
 Endereços inexistentes ou sem permissão voltam para o início. `/ordens-servico`
 redireciona para `/agendamentos`.
@@ -217,8 +282,8 @@ redireciona para `/agendamentos`.
 
 | Perfil | Pode |
 | --- | --- |
-| `ceo` | Tudo, incluindo usuários, exclusões e relatórios |
-| `atendente` | Clientes, serviços e agendamentos (com ordem de serviço e pagamento) |
+| `ceo` | Tudo, incluindo usuários, serviços, despesas, notificações, exclusões e relatórios |
+| `atendente` | Clientes, consulta de serviços e agendamentos (com ordem de serviço e pagamento) |
 | `estoquista` | Estoque |
 | `tecnico` | Ver os próprios atendimentos, iniciar e concluir, fazer check-in/check-out, descontar peças extras, registrar pagamento e atendimento não realizado |
 
@@ -241,8 +306,14 @@ UmuFrio/
 │   │   ├── routes/       # rotas da API
 │   │   ├── ordemHelpers.js  # exclusão de OS com devolução ao estoque
 │   │   ├── security.js   # auth, perfis, senha e validação de CPF
+│   │   ├── documentos.js    # CPF/CNPJ (validação e tipo de pessoa)
+│   │   ├── validacoes.js    # UF, nome, número do imóvel
+│   │   ├── estoqueRegras.js # regra de estoque mínimo e limites
+│   │   ├── despesasRegras.js # vínculo da despesa com veículo/funcionário
+│   │   ├── notificacoes.js  # avisos do sino
 │   │   ├── app.js
 │   │   └── server.js
+│   ├── test/             # testes automatizados (node:test)
 │   ├── .env.example
 │   └── package.json
 └── frontend/
@@ -250,12 +321,23 @@ UmuFrio/
     │   ├── components/   # layout, ícones, diálogos reutilizáveis
     │   ├── hooks/        # useApiCrud
     │   ├── pages/        # uma página por módulo
-    │   ├── utils/        # máscaras, validação de CPF e regras do atendimento
+    │   ├── utils/        # máscaras, validações, cargo, estoque, despesas e regras do atendimento
     │   ├── routes.js     # mapa das rotas de URL e permissões do menu
     │   └── App.jsx
     ├── .env.example
     └── package.json
 ```
+
+## Testes
+
+```bash
+cd backend
+node --test test/fase8.test.js
+node --test test/fase9.test.js   # e os demais arquivos de test/
+```
+
+Os testes cobrem as regras puras (documentos, validações de cadastro, estoque,
+despesas, relatórios e permissões das rotas) e não precisam de banco.
 
 ## API
 
@@ -269,6 +351,9 @@ UmuFrio/
 | Serviços | `/api/servicos` (inclui `PATCH /:id/status` para inativar e reativar) |
 | Ordens de serviço | `/api/ordens-servico` (inclui `PATCH /:id/avancar`, `PATCH /:id/pagamento` e `/:id/pecas-extras`) |
 | Produtos e estoque | `/api/produtos` |
+| Veículos (CEO) | `/api/veiculos` |
+| Despesas (CEO) | `/api/despesas` (aceita `veiculoId` em combustível/manutenção e `funcionarioId` em salários) |
+| Notificações (CEO) | `/api/notificacoes` |
 | PIX do atendimento | `GET/POST /api/ordens-servico/:id/pix`, `POST /:id/pix/cancelar`, `POST /:id/pix/simular` (só no modo demonstração) |
 | Aviso do Mercado Pago | `POST /api/pix/webhook` (público; valida a assinatura e consulta o status na API) |
 | Check-in/check-out | `GET /api/ordens-servico/:id/localizacao`, `POST /:id/checkin`, `POST /:id/checkout` (técnico do atendimento) |
