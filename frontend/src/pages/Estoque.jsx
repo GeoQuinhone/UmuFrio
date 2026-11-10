@@ -12,7 +12,7 @@ import "./catalog-stock.css";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import { mascaraMoeda, moedaParaNumero } from "../utils/mascaras.js";
 import ProdutoSelect from "../components/ProdutoSelect.jsx";
-import { situacaoEstoque } from "../utils/estoque.js";
+import { situacaoEstoque, LIMITE_QUANTIDADE, LIMITE_VALOR_UNITARIO } from "../utils/estoque.js";
 
 // Evita o "05" ao digitar em campos numéricos que começam em 0.
 const semZeroAEsquerda = (valor) => String(valor).replace(/^0+(?=\d)/, "");
@@ -146,6 +146,8 @@ function useDialogFocus(isOpen, onClose) {
 }
 
 export default function Estoque({ crud, onBack }) {
+  const formCardRef = useRef(null);
+  const movCardRef = useRef(null);
   const { confirm, confirmElement } = useConfirm();
   const {
     items,
@@ -229,6 +231,25 @@ export default function Estoque({ crud, onBack }) {
     );
   });
 
+  // Ao abrir o cadastro/edição ou a movimentação, a tela rola até o formulário
+  // (antes a pessoa clicava em editar numa linha lá embaixo e não via nada).
+  useEffect(() => {
+    if (!showForm) return;
+    const t = setTimeout(() => {
+      formCardRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+      formCardRef.current?.querySelector?.("input:not([disabled])")?.focus?.({ preventScroll: true });
+    }, 30);
+    return () => clearTimeout(t);
+  }, [showForm, editingId]);
+
+  useEffect(() => {
+    if (!showMovement) return;
+    const t = setTimeout(() => {
+      movCardRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    }, 30);
+    return () => clearTimeout(t);
+  }, [showMovement]);
+
   function iniciarNovo() {
     setEditingId(null);
     setForm(FORM_VAZIO);
@@ -276,9 +297,21 @@ export default function Estoque({ crud, onBack }) {
       return;
     }
 
+    if (valorUnitario > LIMITE_VALOR_UNITARIO) {
+      setFormError("Valor unitário acima do limite permitido.");
+      return;
+    }
+
     if (!Number.isInteger(saldo) || saldo < 0) {
       setFormError(
         "O saldo deve ser um número inteiro não negativo.",
+      );
+      return;
+    }
+
+    if (saldo > LIMITE_QUANTIDADE || quantidadeMinima > LIMITE_QUANTIDADE) {
+      setFormError(
+        `Saldo e quantidade mínima devem ficar entre 0 e ${LIMITE_QUANTIDADE} unidades.`,
       );
       return;
     }
@@ -351,6 +384,21 @@ export default function Estoque({ crud, onBack }) {
       return;
     }
 
+    if (quantidade > LIMITE_QUANTIDADE) {
+      setMovementError(`Cada lançamento aceita no máximo ${LIMITE_QUANTIDADE} unidades.`);
+      return;
+    }
+
+    if (
+      movementForm.tipo === "entrada" &&
+      Number(produto.saldo ?? 0) + quantidade > LIMITE_QUANTIDADE
+    ) {
+      setMovementError(
+        `Limite de ${LIMITE_QUANTIDADE} unidades por produto: o saldo atual é ${produto.saldo ?? 0}, cabem mais ${Math.max(0, LIMITE_QUANTIDADE - Number(produto.saldo ?? 0))}.`,
+      );
+      return;
+    }
+
     if (
       movementForm.tipo === "saida" &&
       quantidade > Number(produto.saldo ?? 0)
@@ -410,14 +458,24 @@ export default function Estoque({ crud, onBack }) {
       subtitle="Acompanhe peças e materiais antes que faltem no atendimento."
       onBack={onBack}
       action={
-        <button
-          type="button"
-          className="catalog-header-action"
-          onClick={abrirMovimentacao}
-        >
-          <Icon name="plus" size={16} />
-          Registrar movimentação
-        </button>
+        <div className="catalog-header-actions">
+          <button
+            type="button"
+            className="catalog-header-action catalog-header-action--novo"
+            onClick={iniciarNovo}
+          >
+            <Icon name="plus" size={16} />
+            Novo produto
+          </button>
+          <button
+            type="button"
+            className="catalog-header-action"
+            onClick={abrirMovimentacao}
+          >
+            <Icon name="plus" size={16} />
+            Registrar movimentação
+          </button>
+        </div>
       }
     >
       <div className="catalog-page-content catalog-stock-page">
@@ -428,6 +486,7 @@ export default function Estoque({ crud, onBack }) {
 
         {showMovement && (
           <form
+            ref={movCardRef}
             className="catalog-form-card stock-movement-form"
             onSubmit={registrarMovimentacao}
           >
@@ -487,6 +546,7 @@ export default function Estoque({ crud, onBack }) {
                     <TextInput
                       type="number"
                       min="1"
+                      max={LIMITE_QUANTIDADE}
                       step="1"
                       value={movementForm.quantidade}
                       onChange={(event) =>
@@ -542,6 +602,7 @@ export default function Estoque({ crud, onBack }) {
 
         {showForm && (
           <form
+            ref={formCardRef}
             className="catalog-form-card stock-product-form"
             onSubmit={salvarProduto}
           >
@@ -599,6 +660,7 @@ export default function Estoque({ crud, onBack }) {
                   <TextInput
                     type="number"
                     min="0"
+                    max={LIMITE_QUANTIDADE}
                     step="1"
                     value={form.saldo}
                     onChange={(event) =>
@@ -611,6 +673,7 @@ export default function Estoque({ crud, onBack }) {
                 <TextInput
                   type="number"
                   min="0"
+                  max={LIMITE_QUANTIDADE}
                   step="1"
                   value={form.quantidadeMinima}
                   onChange={(event) =>
@@ -694,14 +757,6 @@ export default function Estoque({ crud, onBack }) {
           >
             <Icon name="filter" size={16} />
             Filtros
-          </button>
-          <button
-            type="button"
-            className="catalog-secondary-button stock-new-product"
-            onClick={iniciarNovo}
-          >
-            <Icon name="plus" size={15} />
-            Novo produto
           </button>
         </div>
 

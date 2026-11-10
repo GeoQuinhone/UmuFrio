@@ -2,6 +2,7 @@ import { Router } from "express";
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { clientes, agendamentos } from "../db/schema.js";
+import { nomeClienteValido, numeroImovelValido, ufValida } from "../validacoes.js";
 import { onlyDigits, roles, validId, documentoValido, tipoPessoaDoDocumento } from "../security.js";
 
 const router = Router();
@@ -24,16 +25,23 @@ function validarCliente(body, { validarCpf = true } = {}) {
     return "Preencha nome, CPF/CNPJ válido e telefone.";
   }
 
+  const pj = body.tipoPessoa === "PJ" || onlyDigits(body.cpf).length === 14;
+  if (!nomeClienteValido(body.nome, pj ? "PJ" : "PF")) {
+    return pj
+      ? "Razão social inválida: use apenas letras, números e & . - / , ( )."
+      : "Nome inválido: use apenas letras (sem números).";
+  }
+
   if (
     onlyDigits(body.cep).length !== 8 ||
     !body.logradouro?.trim() ||
-    !body.numero?.trim() ||
+    !numeroImovelValido(body.numero) ||
     !body.bairro?.trim() ||
     !body.cidade?.trim() ||
-    !/^[A-Za-z]{2}$/.test(body.estado || "") ||
+    !ufValida(body.estado) ||
     !TIPOS_RESIDENCIA.includes(body.tipoResidencia)
   ) {
-    return "Preencha corretamente o endereço e o tipo de residência.";
+    return "Preencha corretamente o endereço: número só com dígitos, UF de um estado válido e tipo de residência.";
   }
 
   return null;

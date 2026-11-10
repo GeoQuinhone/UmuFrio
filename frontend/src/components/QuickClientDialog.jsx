@@ -3,6 +3,8 @@ import { Field, TextInput, Select } from "./FormControls.jsx";
 import { mascaraTelefone, mascaraCep, documentoValido } from "../utils/mascaras.js";
 import DocumentoCliente from "./DocumentoCliente.jsx";
 import "../pages/clients-users.css";
+import { UFS, ufValida, nomeClienteValido, numeroImovelValido, filtrarNomePessoa, filtrarRazaoSocial, filtrarNumeroImovel } from "../utils/validacoes.js";
+
 
 const FORM_VAZIO = {
   nome: "",
@@ -110,7 +112,12 @@ export default function QuickClientDialog({ clientesExistentes = [], onClose, on
   function validar() {
     const novosErros = {};
 
-    if (!form.nome.trim()) novosErros.nome = "Informe o nome.";
+    if (!form.nome.trim()) novosErros.nome = form.tipoPessoa === "PJ" ? "Informe a razão social." : "Informe o nome.";
+    else if (!nomeClienteValido(form.nome, form.tipoPessoa)) {
+      novosErros.nome = form.tipoPessoa === "PJ"
+        ? "Use apenas letras, números e & . - / , ( )."
+        : "O nome deve ter apenas letras (sem números).";
+    }
 
     const rotuloDoc = form.tipoPessoa === "PJ" ? "CNPJ" : "CPF";
     if (!form.cpf.trim()) novosErros.cpf = `Informe o ${rotuloDoc}.`;
@@ -132,10 +139,11 @@ export default function QuickClientDialog({ clientesExistentes = [], onClose, on
     }
     if (!form.logradouro.trim()) novosErros.logradouro = "Informe o logradouro.";
     if (!form.numero.trim()) novosErros.numero = "Informe o número.";
+    else if (!numeroImovelValido(form.numero)) novosErros.numero = "Use somente números (até 6 dígitos).";
     if (!form.bairro.trim()) novosErros.bairro = "Informe o bairro.";
     if (!form.cidade.trim()) novosErros.cidade = "Informe a cidade.";
-    if (!/^[A-Za-z]{2}$/.test(form.estado.trim())) {
-      novosErros.estado = "UF com 2 letras.";
+    if (!ufValida(form.estado)) {
+      novosErros.estado = "Selecione um estado válido.";
     }
 
     setErrors(novosErros);
@@ -215,8 +223,8 @@ export default function QuickClientDialog({ clientesExistentes = [], onClose, on
             <Field label="Nome" error={errors.nome}>
               <TextInput
                 value={form.nome}
-                onChange={(event) => setForm({ ...form, nome: event.target.value })}
-                placeholder="Nome completo"
+                onChange={(event) => setForm({ ...form, nome: form.tipoPessoa === "PJ" ? filtrarRazaoSocial(event.target.value) : filtrarNomePessoa(event.target.value) })}
+                placeholder={form.tipoPessoa === "PJ" ? "Razão social" : "Nome completo (só letras)"}
                 autoFocus
               />
             </Field>
@@ -253,7 +261,9 @@ export default function QuickClientDialog({ clientesExistentes = [], onClose, on
             <Field label="Número" error={errors.numero}>
               <TextInput
                 value={form.numero}
-                onChange={(event) => setForm({ ...form, numero: event.target.value })}
+                onChange={(event) => setForm({ ...form, numero: filtrarNumeroImovel(event.target.value) })}
+                inputMode="numeric"
+                maxLength={6}
                 placeholder="Nº"
               />
             </Field>
@@ -277,12 +287,15 @@ export default function QuickClientDialog({ clientesExistentes = [], onClose, on
               />
             </Field>
             <Field label="UF" error={errors.estado}>
-              <TextInput
+              <Select
                 value={form.estado}
-                onChange={(event) => setForm({ ...form, estado: event.target.value.toUpperCase() })}
-                placeholder="PR"
-                maxLength={2}
-              />
+                onChange={(event) => setForm({ ...form, estado: event.target.value })}
+              >
+                <option value="">UF</option>
+                {UFS.map((uf) => (
+                  <option key={uf} value={uf}>{uf}</option>
+                ))}
+              </Select>
             </Field>
             <Field label="Tipo de residência">
               <Select

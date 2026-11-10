@@ -2,6 +2,7 @@ import { Router } from "express";
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { usuarios } from "../db/schema.js";
+import { nomePessoaValido } from "../validacoes.js";
 import {
   hashPassword,
   onlyDigits,
@@ -82,6 +83,12 @@ router.post(
         perfil,
         senha,
       } = req.body;
+
+      if (!nomePessoaValido(nome)) {
+        return res.status(400).json({
+          error: "Nome inválido: use apenas letras (sem números).",
+        });
+      }
 
       if (
         !nome?.trim() ||
@@ -171,6 +178,12 @@ router.put(
         perfil,
         senha,
       } = req.body;
+
+      if (!nomePessoaValido(nome)) {
+        return res.status(400).json({
+          error: "Nome inválido: use apenas letras (sem números).",
+        });
+      }
 
       if (
         !nome?.trim() ||

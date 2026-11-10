@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { desc, eq } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { despesas } from "../db/schema.js";
+import { despesas, veiculos, usuarios } from "../db/schema.js";
 import { roles, validId } from "../security.js";
 import { CATEGORIAS_DESPESA } from "../relatorios/consultas.js";
+import { normalizarVinculos } from "../despesasRegras.js";
 
 // Fase 8 — controle de gastos. Somente o CEO lança e consulta despesas: elas
 // alimentam o lucro real nos relatórios.
@@ -38,16 +39,59 @@ function validar(body) {
     return { erro: "A observação deve ter no máximo 255 caracteres." };
   }
 
+  const vinculos = normalizarVinculos(categoria, body);
+  if (vinculos.erro) return { erro: vinculos.erro };
+
   return {
-    dados: { descricao, categoria, valor: valor.toFixed(2), data, observacao },
+    dados: {
+      descricao,
+      categoria,
+      valor: valor.toFixed(2),
+      data,
+      observacao,
+      veiculoId: vinculos.veiculoId,
+      funcionarioId: vinculos.funcionarioId,
+    },
   };
+}
+
+// Confere se o veículo/funcionário escolhido existe (e o funcionário está ativo).
+async function conferirVinculos(dados) {
+  if (dados.veiculoId) {
+    const [v] = await db.select({ id: veiculos.id }).from(veiculos).where(eq(veiculos.id, dados.veiculoId));
+    if (!v) return "Veículo não encontrado.";
+  }
+  if (dados.funcionarioId) {
+    const [u] = await db
+      .select({ id: usuarios.id, ativo: usuarios.ativo })
+      .from(usuarios)
+      .where(eq(usuarios.id, dados.funcionarioId));
+    if (!u) return "Funcionário não encontrado.";
+  }
+  return null;
 }
 
 router.get("/", async (_req, res, next) => {
   try {
     const linhas = await db
-      .select()
+      .select({
+        id: despesas.id,
+        descricao: despesas.descricao,
+        categoria: despesas.categoria,
+        valor: despesas.valor,
+        data: despesas.data,
+        observacao: despesas.observacao,
+        usuarioId: despesas.usuarioId,
+        veiculoId: despesas.veiculoId,
+        funcionarioId: despesas.funcionarioId,
+        veiculoPlaca: veiculos.placa,
+        veiculoModelo: veiculos.modelo,
+        funcionarioNome: usuarios.nome,
+        criadoEm: despesas.criadoEm,
+      })
       .from(despesas)
+      .leftJoin(veiculos, eq(despesas.veiculoId, veiculos.id))
+      .leftJoin(usuarios, eq(despesas.funcionarioId, usuarios.id))
       .orderBy(desc(despesas.data), desc(despesas.id));
     res.json(linhas);
   } catch (error) {
@@ -59,6 +103,8 @@ router.post("/", async (req, res, next) => {
   try {
     const { erro, dados } = validar(req.body);
     if (erro) return res.status(400).json({ error: erro });
+    const erroVinculo = await conferirVinculos(dados);
+    if (erroVinculo) return res.status(400).json({ error: erroVinculo });
 
     const [criada] = await db
       .insert(despesas)
@@ -77,6 +123,8 @@ router.put("/:id", async (req, res, next) => {
 
     const { erro, dados } = validar(req.body);
     if (erro) return res.status(400).json({ error: erro });
+    const erroVinculo = await conferirVinculos(dados);
+    if (erroVinculo) return res.status(400).json({ error: erroVinculo });
 
     const [atualizada] = await db
       .update(despesas)
