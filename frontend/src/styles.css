@@ -376,6 +376,28 @@ button {
   line-height: 1;
 }
 
+.success-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #e3f5ec;
+  color: var(--green);
+  border: 1px solid #b7e2cb;
+  border-radius: 8px;
+  padding: 10px 16px;
+  margin-bottom: 18px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.success-banner button {
+  background: none;
+  border: none;
+  color: var(--green);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
 /* UmuFrio app shell */
 :root {
   --uf-navy: #17364c;
