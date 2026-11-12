@@ -1,5 +1,4 @@
 # UmuFrio
-
 Sistema web para apoiar a gestão de uma empresa de manutenção de ar-condicionado
 e refrigeração. Reúne clientes, serviços, estoque, agendamentos, ordens de
 serviço, veículos, despesas e relatórios em uma aplicação com frontend React,
