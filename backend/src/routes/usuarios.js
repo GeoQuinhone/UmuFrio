@@ -2,7 +2,7 @@ import { Router } from "express";
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { usuarios } from "../db/schema.js";
-import { nomePessoaValido } from "../validacoes.js";
+import { emailValido, nomePessoaValido, senhaValida } from "../validacoes.js";
 import {
   hashPassword,
   onlyDigits,
@@ -102,15 +102,21 @@ router.post(
         });
       }
 
+      if (!emailValido(email)) {
+        return res.status(400).json({
+          error: "E-mail inválido.",
+        });
+      }
+
       if (!cpfValido(cpf)) {
         return res.status(400).json({
           error: "CPF inválido.",
         });
       }
 
-      if (senha.length < 6) {
+      if (!senhaValida(senha)) {
         return res.status(400).json({
-          error: "A senha deve possuir no mínimo 6 caracteres.",
+          error: "A senha deve possuir no mínimo 6 caracteres e não pode ser só espaços.",
         });
       }
 
@@ -195,9 +201,9 @@ router.put(
         });
       }
 
-      if (senha && senha.length < 6) {
+      if (senha && !senhaValida(senha)) {
         return res.status(400).json({
-          error: "A senha deve possuir no mínimo 6 caracteres.",
+          error: "A senha deve possuir no mínimo 6 caracteres e não pode ser só espaços.",
         });
       }
 

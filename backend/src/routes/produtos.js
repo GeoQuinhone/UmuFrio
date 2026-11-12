@@ -15,7 +15,13 @@ import {
   validId,
 } from "../security.js";
 import { avisarEstoque } from "../notificacoes.js";
-import { LIMITE_QUANTIDADE, LIMITE_VALOR_UNITARIO, quantidadeDentroDoLimite } from "../estoqueRegras.js";
+import {
+  LIMITE_QUANTIDADE,
+  LIMITE_VALOR_UNITARIO,
+  MENSAGEM_LIMITE_QUANTIDADE,
+  MENSAGEM_LIMITE_VALOR,
+  quantidadeDentroDoLimite,
+} from "../estoqueRegras.js";
 
 const router = Router();
 
@@ -133,6 +139,16 @@ router.post(
       } = req.body;
 
       if (
+        valorUnitario === undefined ||
+        valorUnitario === null ||
+        String(valorUnitario).trim() === ""
+      ) {
+        return res.status(400).json({
+          error: "Informe o valor unitário.",
+        });
+      }
+
+      if (
         !nome?.trim() ||
         !Number.isFinite(Number(valorUnitario)) ||
         Number(valorUnitario) < 0 ||
@@ -151,13 +167,13 @@ router.post(
         !quantidadeDentroDoLimite(quantidadeMinima)
       ) {
         return res.status(400).json({
-          error: `Saldo e quantidade mínima devem ficar entre 0 e ${LIMITE_QUANTIDADE} unidades.`,
+          error: MENSAGEM_LIMITE_QUANTIDADE,
         });
       }
 
       if (Number(valorUnitario) > LIMITE_VALOR_UNITARIO) {
         return res.status(400).json({
-          error: "Valor unitário acima do limite permitido.",
+          error: MENSAGEM_LIMITE_VALOR,
         });
       }
 
@@ -193,6 +209,16 @@ router.put(
       } = req.body;
 
       if (
+        valorUnitario === undefined ||
+        valorUnitario === null ||
+        String(valorUnitario).trim() === ""
+      ) {
+        return res.status(400).json({
+          error: "Informe o valor unitário.",
+        });
+      }
+
+      if (
         !validId(id) ||
         !nome?.trim() ||
         !Number.isFinite(Number(valorUnitario)) ||
@@ -207,13 +233,13 @@ router.put(
 
       if (!quantidadeDentroDoLimite(quantidadeMinima)) {
         return res.status(400).json({
-          error: `A quantidade mínima deve ficar entre 0 e ${LIMITE_QUANTIDADE} unidades.`,
+          error: MENSAGEM_LIMITE_QUANTIDADE,
         });
       }
 
       if (Number(valorUnitario) > LIMITE_VALOR_UNITARIO) {
         return res.status(400).json({
-          error: "Valor unitário acima do limite permitido.",
+          error: MENSAGEM_LIMITE_VALOR,
         });
       }
 
@@ -264,7 +290,7 @@ async function movimentarEstoque(
 
     if (quantidade > LIMITE_QUANTIDADE) {
       return res.status(400).json({
-        error: `Cada lançamento aceita no máximo ${LIMITE_QUANTIDADE} unidades.`,
+        error: MENSAGEM_LIMITE_QUANTIDADE,
       });
     }
 
@@ -307,7 +333,7 @@ async function movimentarEstoque(
           const error = new Error(
             tipo === "saida"
               ? "Saldo insuficiente ou alterado. Tente novamente."
-              : `Limite de ${LIMITE_QUANTIDADE} unidades por produto: o saldo ficaria acima do permitido.`,
+              : MENSAGEM_LIMITE_QUANTIDADE,
           );
 
           error.status = 409;
