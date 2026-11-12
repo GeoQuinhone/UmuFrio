@@ -38,7 +38,7 @@ const RAIO_M = 150;
 
 // ---------------------------------------------------------------- aleatório
 
-function criarRng(semente) {
+export function criarRng(semente) {
   let a = semente >>> 0;
   const proximo = () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -404,7 +404,7 @@ export function gerarDados(entrada) {
 
   const rng = criarRng(semente);
   const inicio = inicioDoPeriodo(hoje);
-  const fim = fimDoPeriodo(hoje);
+  const fim = entrada.semFuturo ? hoje : fimDoPeriodo(hoje);
   const agoraMs = agora.getTime();
 
   const servicoPorChave = new Map(servicosDb.map((s) => [s.chave, s]));

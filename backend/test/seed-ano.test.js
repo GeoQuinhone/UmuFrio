@@ -323,3 +323,10 @@ test("SQL: valores são escapados e o INSERT mantém ids explícitos", () => {
   assert.match(comando, /\(1, 'a''b'\)/);
   assert.equal(inserirLinhas("t", ["id"], Array.from({ length: 600 }, (_, i) => ({ id: i }))).length, 3);
 });
+
+test("semFuturo: nenhum agendamento depois de hoje", () => {
+  const d = gerarDados(entrada({ semFuturo: true }));
+  assert.ok(d.agendamentos.length > 100);
+  assert.ok(d.agendamentos.every((a) => a.data <= d.periodo.hoje));
+  assert.equal(d.periodo.fim, d.periodo.hoje);
+});

@@ -164,14 +164,18 @@ export const FORMAS_PAGAMENTO = [
   { forma: "dinheiro", peso: 24 },
 ];
 
+// E-mails no formato nomefuncao@umufrio.com.br (CEO: e-mail definido pelo dono).
+export const EMAIL_CEO = "alfaromario2024@umufrio.com.br";
+export const EMAIL_TECNICO_NOVO = "priscilatecnico@umufrio.com.br";
+
 export const USUARIOS_BASE = [
-  { email: "ceo@umufrio.com.br", nome: "Fernanda Objetivo", telefone: "(44) 99101-0001", perfil: "ceo", cpf: "11122233344" },
-  { email: "atendente@umufrio.com.br", nome: "Bruno Aguiar", telefone: "(44) 99101-0002", perfil: "atendente", cpf: "22233344455" },
-  { email: "estoque@umufrio.com.br", nome: "Carla Nunes", telefone: "(44) 99101-0003", perfil: "estoquista", cpf: "33344455566" },
-  { email: "tecnico1@umufrio.com.br", nome: "Diego Torres", telefone: "(44) 99101-0004", perfil: "tecnico", cpf: "44455566677" },
-  { email: "tecnico2@umufrio.com.br", nome: "Eduarda Lima", telefone: "(44) 99101-0005", perfil: "tecnico", cpf: "55566677788" },
-  { email: "tecnico3@umufrio.com.br", nome: "Henrique Matos", telefone: "(44) 99101-0006", perfil: "tecnico", cpf: null },
-  { email: "tecnico4@umufrio.com.br", nome: "Priscila Andrade", telefone: "(44) 99101-0007", perfil: "tecnico", cpf: null },
+  { email: EMAIL_CEO, nome: "Mário Alfaro", telefone: "(44) 99101-0001", perfil: "ceo", cpf: "11144477735" },
+  { email: "brunoatendente@umufrio.com.br", nome: "Bruno Aguiar", telefone: "(44) 99101-0002", perfil: "atendente", cpf: "52998224725" },
+  { email: "carlaestoquista@umufrio.com.br", nome: "Carla Nunes", telefone: "(44) 99101-0003", perfil: "estoquista", cpf: "15350946056" },
+  { email: "diegotecnico@umufrio.com.br", nome: "Diego Torres", telefone: "(44) 99101-0004", perfil: "tecnico", cpf: "86120437002" },
+  { email: "eduardatecnico@umufrio.com.br", nome: "Eduarda Lima", telefone: "(44) 99101-0005", perfil: "tecnico", cpf: "37461928031" },
+  { email: "henriquetecnico@umufrio.com.br", nome: "Henrique Matos", telefone: "(44) 99101-0006", perfil: "tecnico", cpf: "71428793860" },
+  { email: EMAIL_TECNICO_NOVO, nome: "Priscila Andrade", telefone: "(44) 99101-0007", perfil: "tecnico", cpf: "93541134780" },
 ];
 
 export const VEICULOS = [
