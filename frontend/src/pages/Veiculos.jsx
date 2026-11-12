@@ -8,8 +8,10 @@ import {
   Badge,
   EmptyState,
   ErrorBanner,
+  SuccessBanner,
 } from "../components/FormControls.jsx";
 import "./clients-users.css";
+import { useSucesso } from "../hooks/useSucesso.js";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 
 const FORM_VAZIO = {
@@ -76,6 +78,7 @@ export default function Veiculos({ crud, tecnicos, onBack }) {
   const [showForm, setShowForm] = useState(false);
   const [errors, setErrors] = useState({});
   const [banner, setBanner] = useState("");
+  const [sucesso, setSucesso] = useSucesso();
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -156,6 +159,9 @@ export default function Veiculos({ crud, tecnicos, onBack }) {
     };
 
     try {
+      const mensagem = editingId
+        ? "Veículo atualizado com sucesso."
+        : "Veículo cadastrado com sucesso.";
       if (editingId) {
         await update(editingId, payload);
       } else {
@@ -166,6 +172,7 @@ export default function Veiculos({ crud, tecnicos, onBack }) {
       setForm(FORM_VAZIO);
       setEditingId(null);
       setBanner("");
+      setSucesso(mensagem);
     } catch (saveError) {
       setBanner(saveError.message);
     } finally {
@@ -182,6 +189,7 @@ export default function Veiculos({ crud, tecnicos, onBack }) {
 
     try {
       await remove(veiculo.id);
+      setSucesso("Veículo removido com sucesso.");
     } catch (removeError) {
       setBanner(removeError.message);
     }
@@ -224,6 +232,7 @@ export default function Veiculos({ crud, tecnicos, onBack }) {
     >
       <div className="cu-module cu-vehicles">
         <ErrorBanner message={error || banner} onClose={() => setBanner("")} />
+        <SuccessBanner message={sucesso} onClose={() => setSucesso("")} />
 
         {!loading && !error && (
           <section className="cu-summary-grid" aria-label="Resumo de veículos">

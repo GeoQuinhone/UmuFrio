@@ -68,6 +68,7 @@ function PecasExtras({ ordemId, ordemStatus, pago, produtosAtivos, onConsumo }) 
   const [produtoId, setProdutoId] = useState("");
   const [quantidade, setQuantidade] = useState("1");
   const [erro, setErro] = useState("");
+  const [sucessoPeca, setSucessoPeca] = useState("");
   const [salvando, setSalvando] = useState(false);
 
   async function carregar() {
@@ -98,6 +99,7 @@ function PecasExtras({ ordemId, ordemStatus, pago, produtosAtivos, onConsumo }) 
 
     setSalvando(true);
     setErro("");
+    setSucessoPeca("");
     try {
       await apiRequest(`/ordens-servico/${ordemId}/pecas-extras`, {
         method: "POST",
@@ -106,6 +108,7 @@ function PecasExtras({ ordemId, ordemStatus, pago, produtosAtivos, onConsumo }) 
       setProdutoId("");
       setQuantidade("1");
       await carregar();
+      setSucessoPeca("Peça extra lançada e descontada do estoque.");
       onConsumo?.();
     } catch (saveError) {
       setErro(saveError.message);
@@ -143,6 +146,7 @@ function PecasExtras({ ordemId, ordemStatus, pago, produtosAtivos, onConsumo }) 
       {ordemStatus === "andamento" && !pago && (
         <form className="os-extra-parts-form" onSubmit={registrarConsumo}>
           {erro && <p className="catalog-form-error os-extra-parts-error" role="alert">{erro}</p>}
+          {sucessoPeca && <p className="success-banner" role="status">{sucessoPeca}</p>}
           <Field label="Peça">
             <ProdutoSelect
               produtos={produtosAtivos}

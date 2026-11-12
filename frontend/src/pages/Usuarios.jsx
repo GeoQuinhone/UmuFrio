@@ -8,8 +8,10 @@ import {
   Badge,
   EmptyState,
   ErrorBanner,
+  SuccessBanner,
 } from "../components/FormControls.jsx";
 import "./clients-users.css";
+import { useSucesso } from "../hooks/useSucesso.js";
 import { mascaraCpf, mascaraTelefone, cpfValido } from "../utils/mascaras.js";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import { nomePessoaValido, filtrarNomePessoa } from "../utils/validacoes.js";
@@ -238,6 +240,7 @@ export default function Usuarios({ crud, onBack }) {
   const [showForm, setShowForm] = useState(false);
   const [errors, setErrors] = useState({});
   const [banner, setBanner] = useState("");
+  const [sucesso, setSucesso] = useSucesso();
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [profileFilter, setProfileFilter] = useState("all");
@@ -324,6 +327,9 @@ export default function Usuarios({ crud, onBack }) {
     setSaving(true);
 
     try {
+      const mensagem = editingId
+        ? "Usuário atualizado com sucesso."
+        : "Usuário cadastrado com sucesso.";
       if (editingId) {
         const dados = {
           nome: form.nome,
@@ -348,6 +354,7 @@ export default function Usuarios({ crud, onBack }) {
       setForm(FORM_VAZIO);
       setEditingId(null);
       setBanner("");
+      setSucesso(mensagem);
     } catch (saveError) {
       setBanner(saveError.message);
     } finally {
@@ -359,6 +366,11 @@ export default function Usuarios({ crud, onBack }) {
     try {
       await action(usuario.id, "/status");
       setBanner("");
+      setSucesso(
+        usuarioAtivo(usuario)
+          ? "Usuário inativado com sucesso."
+          : "Usuário reativado com sucesso.",
+      );
     } catch (actionError) {
       setBanner(actionError.message);
     }
@@ -374,6 +386,7 @@ export default function Usuarios({ crud, onBack }) {
     try {
       await remove(usuario.id);
       setSelectedUser(null);
+      setSucesso("Usuário removido com sucesso.");
     } catch (removeError) {
       setBanner(removeError.message);
     }
@@ -433,6 +446,7 @@ export default function Usuarios({ crud, onBack }) {
           message={error || banner}
           onClose={() => setBanner("")}
         />
+        <SuccessBanner message={sucesso} onClose={() => setSucesso("")} />
 
         {!loading && !error && (
           <section className="cu-summary-grid" aria-label="Resumo da equipe">
