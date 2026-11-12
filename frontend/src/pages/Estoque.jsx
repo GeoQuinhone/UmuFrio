@@ -7,8 +7,10 @@ import {
   TextInput,
   EmptyState,
   ErrorBanner,
+  SuccessBanner,
 } from "../components/FormControls.jsx";
 import "./catalog-stock.css";
+import { useSucesso } from "../hooks/useSucesso.js";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import { mascaraMoeda, moedaParaNumero } from "../utils/mascaras.js";
 import ProdutoSelect from "../components/ProdutoSelect.jsx";
@@ -165,6 +167,7 @@ export default function Estoque({ crud, onBack }) {
   const [form, setForm] = useState(FORM_VAZIO);
   const [formError, setFormError] = useState("");
   const [banner, setBanner] = useState("");
+  const [sucesso, setSucesso] = useSucesso();
   const [saving, setSaving] = useState(false);
   const [showMovement, setShowMovement] = useState(false);
   const [movementForm, setMovementForm] = useState(MOVIMENTACAO_VAZIA);
@@ -329,6 +332,9 @@ export default function Estoque({ crud, onBack }) {
     setSaving(true);
 
     try {
+      const mensagem = editingId
+        ? "Produto atualizado com sucesso."
+        : "Produto cadastrado com sucesso.";
       if (editingId) {
         await update(editingId, {
           nome: form.nome.trim(),
@@ -346,6 +352,7 @@ export default function Estoque({ crud, onBack }) {
 
       cancelarFormulario();
       setBanner("");
+      setSucesso(mensagem);
     } catch (saveError) {
       setBanner(saveError.message);
     } finally {
@@ -419,6 +426,11 @@ export default function Estoque({ crud, onBack }) {
       );
       cancelarMovimentacao();
       setBanner("");
+      setSucesso(
+        movementForm.tipo === "entrada"
+          ? "Entrada registrada com sucesso."
+          : "Saída registrada com sucesso.",
+      );
     } catch (actionError) {
       setMovementError(actionError.message);
     } finally {
@@ -437,6 +449,7 @@ export default function Estoque({ crud, onBack }) {
     try {
       await remove(produto.id);
       setBanner("");
+      setSucesso("Produto removido com sucesso.");
       if (viewingProduct?.id === produto.id) {
         setViewingProduct(null);
       }
@@ -483,6 +496,7 @@ export default function Estoque({ crud, onBack }) {
           message={error || banner}
           onClose={() => setBanner("")}
         />
+        <SuccessBanner message={sucesso} onClose={() => setSucesso("")} />
 
         {showMovement && (
           <form

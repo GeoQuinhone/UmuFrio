@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useLocation, useMatch, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../AuthContext.jsx";
-import { Badge, EmptyState, ErrorBanner, Field, Select, TextInput } from "../components/FormControls.jsx";
+import { Badge, EmptyState, ErrorBanner, SuccessBanner, Field, Select, TextInput } from "../components/FormControls.jsx";
 import Icon from "../components/Icon.jsx";
 import Layout from "../components/Layout.jsx";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
@@ -23,6 +23,7 @@ import {
   valorDoAtendimento,
 } from "../utils/atendimento.js";
 import "./scheduling-orders.css";
+import { useSucesso } from "../hooks/useSucesso.js";
 
 const LISTA = "/agendamentos";
 
@@ -145,6 +146,7 @@ export default function Agendamentos({
   const [showQuickClient, setShowQuickClient] = useState(false);
   const [errors, setErrors] = useState({});
   const [banner, setBanner] = useState("");
+  const [sucesso, setSucesso] = useSucesso();
   const [avisoWhatsApp, setAvisoWhatsApp] = useState(null);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
@@ -322,6 +324,11 @@ export default function Agendamentos({
       }
       await ordensServico?.reload?.();
       setBanner("");
+      setSucesso(
+        emEditar && alvo
+          ? "Agendamento atualizado com sucesso."
+          : "Atendimento agendado com sucesso.",
+      );
       navigate(LISTA);
     } catch (saveError) {
       setBanner(saveError.message);
@@ -355,6 +362,11 @@ export default function Agendamentos({
       const resultado = await ordensServico.action(atendimento.ordemId, "/avancar");
       await recarregarTudo();
       setBanner("");
+      setSucesso(
+        iniciando
+          ? "Atendimento iniciado com sucesso."
+          : "Atendimento concluído com sucesso.",
+      );
       setAvisoWhatsApp(resultado?.aviso || null);
     } catch (actionError) {
       setBanner(actionError.message);
@@ -372,6 +384,7 @@ export default function Agendamentos({
       await action(atendimento.id, "/cancelar");
       await recarregarTudo();
       setBanner("");
+      setSucesso("Agendamento cancelado com sucesso.");
     } catch (actionError) {
       setBanner(actionError.message);
     }
@@ -388,6 +401,7 @@ export default function Agendamentos({
       await action(atendimento.id, "/nao-realizado", { motivo });
       await recarregarTudo();
       setBanner("");
+      setSucesso("Atendimento registrado como não realizado.");
     } catch (actionError) {
       setBanner(actionError.message);
     }
@@ -404,6 +418,7 @@ export default function Agendamentos({
       await remove(atendimento.id);
       await recarregarTudo();
       setBanner("");
+      setSucesso("Atendimento excluído com sucesso.");
     } catch (removeError) {
       setBanner(removeError.message);
     }
@@ -412,11 +427,13 @@ export default function Agendamentos({
   async function salvarPagamento(payload) {
     await ordensServico.action(alvo.ordemId, "/pagamento", payload);
     await crud.reload();
+    setSucesso("Pagamento registrado com sucesso.");
   }
 
   async function cadastrarClienteRapido(payload) {
     const cliente = await clientes.add(payload);
     setForm((current) => ({ ...current, clienteId: String(cliente.id) }));
+    setSucesso("Cliente cadastrado com sucesso.");
     return cliente;
   }
 
@@ -558,6 +575,7 @@ export default function Agendamentos({
     >
       <div className="scheduling-orders-screen schedule-screen">
         <ErrorBanner message={error || tecnicos?.error || banner} onClose={() => setBanner("")} />
+        <SuccessBanner message={sucesso} onClose={() => setSucesso("")} />
         <AvisoWhatsApp aviso={avisoWhatsApp} onClose={() => setAvisoWhatsApp(null)} />
 
         <section className="orders-summary-grid" aria-label="Resumo dos atendimentos">

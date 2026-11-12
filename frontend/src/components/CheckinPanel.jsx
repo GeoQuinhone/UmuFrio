@@ -81,6 +81,7 @@ function Linha({ rotulo, registro }) {
 export default function CheckinPanel({ ordemId, ordemStatus }) {
   const [info, setInfo] = useState(null);
   const [erro, setErro] = useState("");
+  const [sucesso, setSucesso] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [fora, setFora] = useState(null); // { tipo, posicao, distanciaM, raioM, mensagem }
   const [justificativa, setJustificativa] = useState("");
@@ -107,6 +108,7 @@ export default function CheckinPanel({ ordemId, ordemStatus }) {
 
   async function registrar(tipo) {
     setErro("");
+    setSucesso("");
     setFora(null);
     setEnviando(true);
     try {
@@ -114,6 +116,7 @@ export default function CheckinPanel({ ordemId, ordemStatus }) {
       try {
         await enviar(tipo, posicao);
         await carregar();
+        setSucesso(tipo === "checkin" ? "Check-in registrado com sucesso." : "Check-out registrado com sucesso.");
       } catch (falha) {
         if (falha.dados?.codigo === "FORA_DO_RAIO") {
           setJustificativa("");
@@ -140,6 +143,7 @@ export default function CheckinPanel({ ordemId, ordemStatus }) {
       await enviar(fora.tipo, fora.posicao, justificativa.trim());
       setFora(null);
       await carregar();
+      setSucesso(fora.tipo === "checkin" ? "Check-in registrado com sucesso." : "Check-out registrado com sucesso.");
     } catch (falha) {
       setErro(falha.message);
     } finally {
@@ -174,6 +178,10 @@ export default function CheckinPanel({ ordemId, ordemStatus }) {
 
       {erro && (
         <p className="catalog-form-error" role="alert">{erro}</p>
+      )}
+
+      {sucesso && !erro && (
+        <p className="success-banner" role="status">{sucesso}</p>
       )}
 
       {fora && (

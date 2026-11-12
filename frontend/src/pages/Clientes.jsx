@@ -11,6 +11,7 @@ import {
   ErrorBanner, SuccessBanner,
 } from "../components/FormControls.jsx";
 import "./clients-users.css";
+import { useSucesso } from "../hooks/useSucesso.js";
 import { UFS, ufValida, nomeClienteValido, numeroImovelValido, filtrarNomePessoa, filtrarRazaoSocial, filtrarNumeroImovel } from "../utils/validacoes.js";
 
 import { mascaraTelefone, mascaraCep, documentoValido, formatarDocumento, tipoDoDocumento } from "../utils/mascaras.js";
@@ -221,7 +222,7 @@ export default function Clientes({ crud, onBack }) {
   const [showForm, setShowForm] = useState(false);
   const [errors, setErrors] = useState({});
   const [banner, setBanner] = useState("");
-  const [sucesso, setSucesso] = useState("");
+  const [sucesso, setSucesso] = useSucesso();
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -233,12 +234,6 @@ export default function Clientes({ crud, onBack }) {
     active: items.filter(clienteAtivo).length,
     inactive: items.filter((cliente) => !clienteAtivo(cliente)).length,
   };
-
-  useEffect(() => {
-    if (!sucesso) return undefined;
-    const timer = setTimeout(() => setSucesso(""), 6000);
-    return () => clearTimeout(timer);
-  }, [sucesso]);
 
   function iniciarNovo() {
     setSucesso("");
@@ -403,6 +398,7 @@ export default function Clientes({ crud, onBack }) {
     try {
       await remove(cliente.id);
       setSelectedClient(null);
+      setSucesso("Cliente removido com sucesso.");
     } catch (removeError) {
       setBanner(removeError.message);
     }
