@@ -281,6 +281,15 @@ export const migrations = [
    ALTER TABLE despesas ADD COLUMN IF NOT EXISTS funcionario_id integer REFERENCES usuarios(id) ON DELETE SET NULL;
    CREATE INDEX IF NOT EXISTS ix_despesas_veiculo ON despesas (veiculo_id) WHERE veiculo_id IS NOT NULL;
    CREATE INDEX IF NOT EXISTS ix_despesas_funcionario ON despesas (funcionario_id) WHERE funcionario_id IS NOT NULL`,
+  // Token de 24 horas do Gupshup guardado no banco: o Render reinicia o
+  // processo (inclusive ao "acordar") e o Gupshup só permite 3 tokens ativos
+  // por app, então cada processo reaproveita o token que ainda vale.
+  `CREATE TABLE IF NOT EXISTS tokens_integracao (
+     nome varchar(40) PRIMARY KEY,
+     valor text NOT NULL,
+     expira_em timestamptz NOT NULL,
+     atualizado_em timestamptz NOT NULL DEFAULT now()
+   )`,
 ];
 
 export async function runMigrations(client) {

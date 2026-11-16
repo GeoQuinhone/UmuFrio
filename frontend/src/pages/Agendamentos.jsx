@@ -62,7 +62,8 @@ const TEXTO_AVISO_WHATSAPP = {
   telefone_invalido: "O telefone do cliente não é válido para WhatsApp. Confira o cadastro.",
 };
 
-// Resultado do aviso ao cliente depois de iniciar ou concluir o atendimento.
+// Resultado do aviso ao cliente depois de iniciar, concluir ou registrar o
+// atendimento como não realizado.
 // Quando o envio automático não acontece, oferece o link wa.me com a mensagem.
 function AvisoWhatsApp({ aviso, onClose }) {
   if (!aviso) return null;
@@ -398,10 +399,11 @@ export default function Agendamentos({
     if (!motivo) return;
 
     try {
-      await action(atendimento.id, "/nao-realizado", { motivo });
+      const resultado = await action(atendimento.id, "/nao-realizado", { motivo });
       await recarregarTudo();
       setBanner("");
       setSucesso("Atendimento registrado como não realizado.");
+      setAvisoWhatsApp(resultado?.aviso || null);
     } catch (actionError) {
       setBanner(actionError.message);
     }
