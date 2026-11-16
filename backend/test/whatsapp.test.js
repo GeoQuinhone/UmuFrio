@@ -2,8 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   avisarCliente,
+  definirArmazenamentoToken,
   esquecerTokenGupshup,
   montarMensagem,
+  numeroLiberado,
   provedorDoEvento,
   requisicaoGupshup,
   telefoneParaWhatsApp,
@@ -19,6 +21,7 @@ const VARIAVEIS = [
   "GUPSHUP_TEMPLATE_CONCLUIDO",
   "GUPSHUP_TEMPLATE_NAO_REALIZADO",
   "WHATSAPP_TOKEN",
+  "WHATSAPP_NUMEROS_PERMITIDOS",
   "WHATSAPP_PHONE_NUMBER_ID",
 ];
 
@@ -30,11 +33,22 @@ const DADOS = {
   horario: "2026-11-13T17:30:00Z", // 14:30 em Brasília
 };
 
+// Os testes nunca leem nem gravam o token no banco de quem roda (o .env local
+// pode apontar para um banco de verdade): o token fica numa variável.
+let tokenGuardado = null;
+definirArmazenamentoToken({
+  ler: async () => tokenGuardado,
+  salvar: async (token) => {
+    tokenGuardado = token;
+  },
+});
+
 // Cada teste começa sem nenhuma configuração de WhatsApp e restaura o fetch.
 function ambiente(variaveis = {}) {
   for (const nome of VARIAVEIS) delete process.env[nome];
   Object.assign(process.env, variaveis);
   esquecerTokenGupshup();
+  tokenGuardado = null;
 }
 
 const GUPSHUP = {
@@ -178,4 +192,35 @@ test("segredo recusado vira erro e a tela oferece o link", async (t) => {
   const resultado = await avisarCliente("iniciado", DADOS);
   assert.equal(resultado.status, "erro");
   assert.ok(resultado.link);
+});
+
+test("lista de números liberados: só eles recebem o envio automático", async (t) => {
+  const fetchOriginal = global.fetch;
+  t.after(() => {
+    global.fetch = fetchOriginal;
+  });
+
+  // Aceita os números em qualquer formato, separados por vírgula.
+  ambiente({ ...GUPSHUP, WHATSAPP_NUMEROS_PERMITIDOS: "(44) 99804-9224, 5544999990000" });
+  assert.ok(numeroLiberado("5544998049224"));
+  assert.ok(numeroLiberado("5544999990000"));
+  assert.ok(!numeroLiberado("5544988887777"));
+
+  let envios = 0;
+  global.fetch = async () => {
+    envios += 1;
+    return new Response(JSON.stringify({ status: "submitted" }), { status: 202 });
+  };
+
+  const liberado = await avisarCliente("iniciado", DADOS); // (44) 99999-0000
+  assert.equal(liberado.status, "enviado");
+
+  const fora = await avisarCliente("iniciado", { ...DADOS, clienteTelefone: "(44) 98888-7777" });
+  assert.equal(fora.status, "nao_configurado");
+  assert.ok(fora.link.startsWith("https://wa.me/5544988887777?text="));
+  assert.equal(envios, 1, "o número fora da lista não chama o Gupshup");
+
+  // Sem a variável, todos os números ficam liberados.
+  ambiente(GUPSHUP);
+  assert.ok(numeroLiberado("5544988887777"));
 });

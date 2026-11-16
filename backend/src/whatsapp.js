@@ -79,12 +79,20 @@ async function salvarToken(token) {
   }
 }
 
+// Onde o token é guardado: no banco, por padrão. Os testes trocam por um
+// armazenamento falso para nunca ler nem gravar no banco de quem roda.
+let armazenamentoToken = { ler: lerTokenSalvo, salvar: salvarToken };
+
+export function definirArmazenamentoToken(armazenamento) {
+  armazenamentoToken = armazenamento;
+}
+
 async function credencialGupshup() {
   if (!usaSegredoGupshup()) return process.env.GUPSHUP_API_KEY;
 
   if (tokenAindaVale(tokenGupshup)) return tokenGupshup.valor;
 
-  const salvo = await lerTokenSalvo();
+  const salvo = await armazenamentoToken.ler();
   if (tokenAindaVale(salvo)) {
     tokenGupshup = salvo;
     return salvo.valor;
@@ -112,7 +120,7 @@ async function credencialGupshup() {
     valor,
     expiraEm: Number.isFinite(expiraEm) ? expiraEm : Date.now() + 23 * 60 * 60 * 1000,
   };
-  await salvarToken(tokenGupshup);
+  await armazenamentoToken.salvar(tokenGupshup);
   return valor;
 }
 
@@ -182,6 +190,19 @@ function parametros(dados) {
   return [dados.clienteNome, dados.servicoNome, dados.hora, dados.tecnicoNome].map(
     (texto) => String(texto ?? ""),
   );
+}
+
+// Lista de números liberados (WHATSAPP_NUMEROS_PERMITIDOS, separados por
+// vírgula). Enquanto ela existir, o envio automático só vai para esses
+// números: o banco de demonstração tem clientes com celulares inventados, que
+// podem ser de pessoas reais. Sem a variável, o envio vale para todos.
+export function numeroLiberado(numero) {
+  const lista = String(process.env.WHATSAPP_NUMEROS_PERMITIDOS || "")
+    .split(",")
+    .map((item) => telefoneParaWhatsApp(item))
+    .filter(Boolean);
+
+  return lista.length === 0 || lista.includes(numero);
 }
 
 // Qual caminho de envio automático está configurado para este evento.
@@ -291,8 +312,10 @@ export async function avisarCliente(evento, dados) {
   const mensagem = montarMensagem(evento, dadosComHora);
   const link = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
 
+  // Fora da lista de números liberados, a tela oferece o link (como quando o
+  // envio automático não está configurado) e ninguém recebe nada sozinho.
   const provedor = provedorDoEvento(evento);
-  if (!provedor) {
+  if (!provedor || !numeroLiberado(numero)) {
     return { status: "nao_configurado", link };
   }
 

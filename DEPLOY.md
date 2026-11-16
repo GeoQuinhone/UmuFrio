@@ -192,6 +192,7 @@ Sem estas variáveis, o sistema continua funcionando: a tela mostra o botão
 | `GUPSHUP_CUSTOMER_SECRET` | segredo da conta (Gupshup → Painel → Segredo da conta, 64 caracteres). **Segredo**: só no painel do Render. Vale até 90 dias: ao gerar outro, o anterior para de funcionar na hora, então troque aqui no mesmo momento |
 | `GUPSHUP_APP_ID` | ID do app no Gupshup (app → Configurações → ID do app) |
 | `GUPSHUP_API_KEY` | opcional: chave fixa antiga, usada só se não houver segredo; desligada pelo Gupshup em 31/03/2027 |
+| `WHATSAPP_NUMEROS_PERMITIDOS` | **proteção do banco de demonstração**: números (com DDD, separados por vírgula) que podem receber o envio automático, ex.: `44998049224`. Os outros clientes ficam só com o botão "Enviar pelo WhatsApp". **Apague** quando a empresa for usar com clientes reais |
 | `GUPSHUP_SOURCE` | número que envia, só dígitos com 55 (ex.: `554498890148`) |
 | `GUPSHUP_APP_NAME` | nome do app no Gupshup (ex.: `UmufrioAvisos`) |
 | `GUPSHUP_TEMPLATE_INICIADO` | ID do modelo `servico_iniciado` (Modelos → Gerenciar) |
