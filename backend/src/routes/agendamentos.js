@@ -12,6 +12,7 @@ import {
 import { roles, validId } from "../security.js";
 import { erroHttp, excluirOrdem, sqlValorExtras } from "../ordemHelpers.js";
 import { notificar } from "../notificacoes.js";
+import { avisarCliente } from "../whatsapp.js";
 
 const router = Router();
 
@@ -368,6 +369,10 @@ async function encerrarSemRealizar(req, res, next, { naoRealizado }) {
       });
     }
 
+    // Guarda o serviço antes de encerrar: a OS aberta é removida junto, e o
+    // aviso de "não realizado" ao cliente precisa do nome do serviço.
+    const antes = await buscarUnificado(id);
+
     await db.transaction(async (tx) => {
       const [agendamento] = await tx
         .select()
@@ -439,7 +444,21 @@ async function encerrarSemRealizar(req, res, next, { naoRealizado }) {
       });
     }
 
-    res.json(resultado);
+    // Avisa o cliente pelo WhatsApp que o técnico esteve no local e não foi
+    // possível atender. O motivo digitado fica só no sistema (é interno).
+    // Uma falha no WhatsApp não desfaz o registro.
+    const aviso =
+      naoRealizado && antes
+        ? await avisarCliente("nao_realizado", {
+            clienteNome: antes.clienteNome,
+            clienteTelefone: antes.clienteTelefone,
+            servicoNome: antes.servicoNome || "manutenção",
+            tecnicoNome: antes.tecnicoNome,
+            horario: new Date(),
+          })
+        : null;
+
+    res.json({ ...resultado, aviso });
   } catch (error) {
     next(error);
   }
