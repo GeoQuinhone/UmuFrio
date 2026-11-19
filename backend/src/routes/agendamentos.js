@@ -1,3 +1,5 @@
+// Rotas de agendamentos (/api/agendamentos): cada agendamento nasce junto com a sua ordem de serviço (OS).
+// Inclui listar, criar, editar, cancelar, marcar como "não realizado" e excluir.
 import { Router } from "express";
 import { and, eq, ne } from "drizzle-orm";
 import { db } from "../db/client.js";
@@ -14,6 +16,7 @@ import { erroHttp, excluirOrdem, sqlValorExtras } from "../ordemHelpers.js";
 import { notificar } from "../notificacoes.js";
 import { avisarCliente } from "../whatsapp.js";
 
+// Cria o roteador deste módulo.
 const router = Router();
 
 // Ponto 10: o agendamento e a ordem de serviço formam um fluxo só. Cada
@@ -85,6 +88,11 @@ function minutosDoDia(hora) {
   return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
 }
 
+// Expediente: só é possível agendar das 07:00 às 19:00 (inclusive).
+const EXPEDIENTE_INICIO = 7 * 60;
+const EXPEDIENTE_FIM = 19 * 60;
+
+// Diz se dois horários estão a menos de 1 hora de distância (regra: mínimo de 1h entre atendimentos do mesmo técnico).
 function horarioMuitoProximo(horaA, horaB) {
   return Math.abs(minutosDoDia(horaA) - minutosDoDia(horaB)) < 60;
 }
@@ -105,6 +113,7 @@ function dataDeHoje() {
 // ativos e data futura para o que de fato mudou, para não impedir a edição de
 // um atendimento só porque, por exemplo, o serviço foi inativado depois.
 async function validarAtendimento(executor, body, { id = null, atual = null } = {}) {
+  // Lê e limpa os dados enviados; se faltar algum, responde 400.
   const clienteId = Number(body.clienteId);
   const tecnicoId = Number(body.tecnicoId);
   const servicoId = Number(body.servicoId);
@@ -124,6 +133,7 @@ async function validarAtendimento(executor, body, { id = null, atual = null } = 
     );
   }
 
+  // Só valida "data futura" quando a data ou o horário foram alterados (permite editar um atendimento antigo).
   const dataMudou = !atual || atual.data !== data;
   const horaMudou =
     !atual || minutosDoDia(atual.hora) !== minutosDoDia(hora);
@@ -135,6 +145,18 @@ async function validarAtendimento(executor, body, { id = null, atual = null } = 
     );
   }
 
+  // Trava do expediente: o horário precisa estar entre 07:00 e 19:00 (valida ao criar ou quando o horário é alterado).
+  if (horaMudou) {
+    const minutos = minutosDoDia(hora);
+    if (minutos < EXPEDIENTE_INICIO || minutos > EXPEDIENTE_FIM) {
+      throw erroHttp(
+        "O horário do agendamento deve ser entre 07:00 e 19:00.",
+        400,
+      );
+    }
+  }
+
+  // Busca, ao mesmo tempo, o cliente, o técnico, o serviço e os outros agendamentos do técnico no mesmo dia.
   const [clienteRows, tecnicoRows, servicoRows, mesmoDia] =
     await Promise.all([
       executor.select().from(clientes).where(eq(clientes.id, clienteId)),
@@ -162,6 +184,7 @@ async function validarAtendimento(executor, body, { id = null, atual = null } = 
         ),
     ]);
 
+  // Confere se o cliente existe e está ativo.
   const cliente = clienteRows[0];
 
   if (
@@ -171,10 +194,12 @@ async function validarAtendimento(executor, body, { id = null, atual = null } = 
     throw erroHttp("Selecione um cliente ativo.", 400);
   }
 
+  // Confere se o técnico existe, é técnico e está ativo.
   if (!tecnicoRows[0]) {
     throw erroHttp("Selecione um técnico ativo.", 400);
   }
 
+  // Confere se o serviço existe e está ativo.
   const servico = servicoRows[0];
 
   if (
@@ -193,14 +218,17 @@ async function validarAtendimento(executor, body, { id = null, atual = null } = 
     );
   }
 
+  // Dados já validados e prontos para gravar.
   return { clienteId, tecnicoId, servicoId, data, hora };
 }
 
+// Busca um agendamento já com a OS, cliente, técnico e serviço juntos.
 async function buscarUnificado(id) {
   const [linha] = await selecaoUnificada().where(eq(agendamentos.id, id));
   return linha;
 }
 
+// GET /api/agendamentos — lista os agendamentos; o técnico vê só os dele.
 router.get(
   "/",
   roles("ceo", "atendente", "tecnico"),
@@ -224,6 +252,7 @@ router.get(
   },
 );
 
+// POST /api/agendamentos — cria o agendamento e a OS na mesma transação (ou grava os dois, ou nenhum).
 router.post(
   "/",
   roles("ceo", "atendente"),
@@ -273,16 +302,19 @@ router.put(
         return res.status(400).json({ error: "ID inválido." });
       }
 
+      // Tudo numa transação: confere o agendamento, a OS e grava as mudanças juntas.
       await db.transaction(async (tx) => {
         const [agendamento] = await tx
           .select()
           .from(agendamentos)
           .where(eq(agendamentos.id, id));
 
+        // Agendamento inexistente: 404.
         if (!agendamento) {
           throw erroHttp("Agendamento não encontrado.", 404);
         }
 
+        // Só dá para editar agendamento que ainda está "agendado" (não cancelado).
         if (agendamento.status !== "agendado") {
           throw erroHttp(
             "Só é possível editar atendimentos agendados.",
@@ -295,6 +327,7 @@ router.put(
           .from(ordensServico)
           .where(eq(ordensServico.agendamentoId, id));
 
+        // Só dá para editar enquanto a OS está "aberta" (antes de iniciar o atendimento).
         if (ordem && ordem.status !== "aberta") {
           throw erroHttp(
             "Só é possível editar um atendimento que ainda não foi iniciado.",
@@ -302,6 +335,7 @@ router.put(
           );
         }
 
+        // Valida os novos dados do atendimento, ignorando o próprio agendamento na checagem de horário.
         const dados = await validarAtendimento(tx, req.body, {
           id,
           atual: {
@@ -323,6 +357,7 @@ router.put(
           })
           .where(eq(agendamentos.id, id));
 
+        // Agendamento antigo sem OS: cria a OS; se já existe e o serviço mudou, atualiza o serviço da OS.
         if (!ordem) {
           await tx.insert(ordensServico).values({
             agendamentoId: id,
@@ -357,12 +392,14 @@ async function encerrarSemRealizar(req, res, next, { naoRealizado }) {
       return res.status(400).json({ error: "ID inválido." });
     }
 
+    // Para "não realizado", o motivo é obrigatório.
     if (naoRealizado && !motivo) {
       return res.status(400).json({
         error: "Informe o motivo do atendimento não realizado.",
       });
     }
 
+    // O motivo pode ter no máximo 255 caracteres.
     if (motivo.length > 255) {
       return res.status(400).json({
         error: "O motivo deve ter no máximo 255 caracteres.",
@@ -373,12 +410,14 @@ async function encerrarSemRealizar(req, res, next, { naoRealizado }) {
     // aviso de "não realizado" ao cliente precisa do nome do serviço.
     const antes = await buscarUnificado(id);
 
+    // Em transação: confere a situação do agendamento e da OS e faz o encerramento.
     await db.transaction(async (tx) => {
       const [agendamento] = await tx
         .select()
         .from(agendamentos)
         .where(eq(agendamentos.id, id));
 
+      // Agendamento inexistente: 404.
       if (!agendamento) {
         throw erroHttp("Agendamento não encontrado.", 404);
       }
@@ -390,6 +429,7 @@ async function encerrarSemRealizar(req, res, next, { naoRealizado }) {
         throw erroHttp("Você não pode alterar este agendamento.", 403);
       }
 
+      // Só encerra agendamento que ainda está "agendado".
       if (agendamento.status !== "agendado") {
         throw erroHttp(
           naoRealizado
@@ -404,6 +444,7 @@ async function encerrarSemRealizar(req, res, next, { naoRealizado }) {
         .from(ordensServico)
         .where(eq(ordensServico.agendamentoId, id));
 
+      // Se o atendimento já foi iniciado, não pode mais ser cancelado.
       if (ordem && ordem.status !== "aberta") {
         throw erroHttp(
           naoRealizado
@@ -413,6 +454,7 @@ async function encerrarSemRealizar(req, res, next, { naoRealizado }) {
         );
       }
 
+      // Remove a OS aberta junto, para não sobrar uma ordem sem agendamento.
       if (ordem) {
         await excluirOrdem(tx, ordem.id);
       }
@@ -464,6 +506,7 @@ async function encerrarSemRealizar(req, res, next, { naoRealizado }) {
   }
 }
 
+// PATCH /api/agendamentos/:id/cancelar — cancela o agendamento (CEO, atendente ou técnico).
 router.patch(
   "/:id/cancelar",
   roles("ceo", "atendente", "tecnico"),
@@ -471,6 +514,7 @@ router.patch(
     encerrarSemRealizar(req, res, next, { naoRealizado: false }),
 );
 
+// PATCH /api/agendamentos/:id/nao-realizado — registra que o atendimento não aconteceu, com motivo.
 router.patch(
   "/:id/nao-realizado",
   roles("ceo", "atendente", "tecnico"),
@@ -493,12 +537,14 @@ router.delete(
         return res.status(400).json({ error: "ID inválido." });
       }
 
+      // Em transação: remove a OS (devolvendo peças ao estoque, se estava em andamento) e depois o agendamento.
       await db.transaction(async (tx) => {
         const [agendamento] = await tx
           .select()
           .from(agendamentos)
           .where(eq(agendamentos.id, id));
 
+        // Agendamento inexistente: 404.
         if (!agendamento) {
           throw erroHttp("Agendamento não encontrado.", 404);
         }
@@ -522,4 +568,5 @@ router.delete(
   },
 );
 
+// Exporta o roteador para o app.js.
 export default router;

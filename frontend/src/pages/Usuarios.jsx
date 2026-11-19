@@ -533,7 +533,8 @@ export default function Usuarios({ crud, onBack }) {
                     setForm({ ...form, perfil: event.target.value })
                   }
                 >
-                  <option value="ceo">CEO</option>
+                  {/* CEO só aparece ao editar quem já é CEO; não dá para criar nem promover outro CEO. */}
+                  {form.perfil === "ceo" && <option value="ceo">CEO</option>}
                   <option value="atendente">Atendente</option>
                   <option value="estoquista">Estoquista</option>
                   <option value="tecnico">Técnico</option>
