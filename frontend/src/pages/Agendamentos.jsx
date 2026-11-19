@@ -25,8 +25,10 @@ import {
 import "./scheduling-orders.css";
 import { useSucesso } from "../hooks/useSucesso.js";
 
+// Endereço base da tela de agendamentos.
 const LISTA = "/agendamentos";
 
+// Formulário de agendamento vazio (cliente, serviço, técnico, data e hora).
 const FORM_VAZIO = {
   clienteId: "",
   servicoId: "",
@@ -35,6 +37,7 @@ const FORM_VAZIO = {
   hora: "",
 };
 
+// Formata a data como dia e mês abreviado (ex.: 17 nov).
 function formatDayMonth(value) {
   if (!value) return "—";
   const [year, month, day] = String(value).slice(0, 10).split("-");
@@ -46,15 +49,18 @@ function formatDayMonth(value) {
   return `${day} ${monthName}`;
 }
 
+// Converte a hora (HH:MM) em minutos desde a meia-noite.
 function minutosDoDia(hora) {
   const [h, m] = String(hora || "").slice(0, 5).split(":").map(Number);
   return (h || 0) * 60 + (m || 0);
 }
 
+// Chave de ordenação do atendimento (data e hora).
 function chaveDataHora(atendimento) {
   return `${String(atendimento.data || "").slice(0, 10)} ${String(atendimento.hora || "").slice(0, 5)}`;
 }
 
+// Textos do aviso do WhatsApp para cada resultado do envio.
 const TEXTO_AVISO_WHATSAPP = {
   enviado: "Cliente avisado pelo WhatsApp.",
   nao_configurado: "Avise o cliente pelo WhatsApp: a mensagem já está pronta.",
@@ -62,8 +68,10 @@ const TEXTO_AVISO_WHATSAPP = {
   telefone_invalido: "O telefone do cliente não é válido para WhatsApp. Confira o cadastro.",
 };
 
-// Resultado do aviso ao cliente depois de iniciar ou concluir o atendimento.
+// Resultado do aviso ao cliente depois de iniciar, concluir ou registrar o
+// atendimento como não realizado.
 // Quando o envio automático não acontece, oferece o link wa.me com a mensagem.
+// Faixa que mostra o resultado do aviso ao cliente e, se preciso, o link para enviar pelo WhatsApp.
 function AvisoWhatsApp({ aviso, onClose }) {
   if (!aviso) return null;
   const enviado = aviso.status === "enviado";
@@ -84,6 +92,7 @@ function AvisoWhatsApp({ aviso, onClose }) {
 }
 
 
+// Define em qual aba o atendimento aparece: não realizados, cancelados, concluídos ou ativos.
 function abaDoAtendimento(atendimento) {
   if (atendimento.naoRealizado) return "nao_realizados";
   if (atendimento.status === "cancelado") return "cancelados";
@@ -91,6 +100,7 @@ function abaDoAtendimento(atendimento) {
   return "ativos";
 }
 
+// Tela de agendamentos e ordens de serviço (fluxo único): lista com abas, formulário, detalhes, pagamento, início/conclusão do atendimento e aviso ao cliente.
 export default function Agendamentos({
   crud,
   clientes,
@@ -101,6 +111,7 @@ export default function Agendamentos({
   onEstoqueAlterado,
   onBack,
 }) {
+  // Usuário logado, navegação, perfil e diálogos de confirmação e de motivo.
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -160,6 +171,7 @@ export default function Agendamentos({
     ["ativos", "concluidos", "cancelados", "nao_realizados"].includes(abaInicial) ? abaInicial : "ativos",
   );
 
+  // Listas auxiliares: clientes, técnicos e serviços ativos, e se os dados ainda estão carregando.
   const clientItems = clientes?.items || [];
   const technicianItems = tecnicos?.items || [];
   const serviceItems = servicos?.items || [];
@@ -172,10 +184,12 @@ export default function Agendamentos({
   const dadosCarregando = Boolean(
     clientes?.loading || tecnicos?.loading || servicos?.loading,
   );
+  // Indica se o formulário (novo ou edição) está aberto.
   const formularioAberto = emNovo || emEditar;
 
   // Acesso direto por URL a telas que o perfil não pode usar ou a registros
   // que não existem: volta para a lista com um aviso.
+  // Para quem não pode usar a tela pedida (ou para registro inexistente), volta para a lista.
   useEffect(() => {
     if (loading) return;
 
@@ -203,6 +217,7 @@ export default function Agendamentos({
   }, [loading, isTecnico, emNovo, emEditar, emPagamento, rotaId, alvo, navigate]);
 
   // Novo agendamento exige cliente, técnico e serviço ativos.
+  // Novo agendamento: exige cliente, técnico e serviço ativos.
   useEffect(() => {
     if (!emNovo || isTecnico || dadosCarregando) return;
 
@@ -227,6 +242,7 @@ export default function Agendamentos({
   ]);
 
   // Preenche o formulário uma vez ao abrir "novo" ou "editar".
+  // Preenche o formulário ao abrir "novo" ou "editar".
   useEffect(() => {
     const chaveAtual = emNovo ? "novo" : emEditar && alvo ? `editar-${alvo.id}` : null;
 
@@ -251,15 +267,18 @@ export default function Agendamentos({
     setFormKey(chaveAtual);
   }, [emNovo, emEditar, alvo, formKey]);
 
+  // Abre o formulário de novo agendamento.
   function abrirNovo() {
     setBanner("");
     navigate(`${LISTA}/novo`);
   }
 
+  // Fecha a tela atual e volta para a lista.
   function fecharRota() {
     navigate(LISTA);
   }
 
+  // Fecha o pagamento e volta para o detalhe ou a lista.
   function fecharPagamento() {
     if (location.state?.from === "detalhe" && alvo) {
       navigate(`${LISTA}/${alvo.id}`);
@@ -268,11 +287,13 @@ export default function Agendamentos({
     }
   }
 
+  // Recarrega agendamentos e ordens de serviço (e o estoque, se mudou).
   async function recarregarTudo() {
     await Promise.all([crud.reload(), ordensServico?.reload?.()]);
     onEstoqueAlterado?.();
   }
 
+  // Valida os campos do agendamento (cliente, serviço, técnico, data e hora).
   function validar() {
     const novosErros = {};
 
@@ -281,6 +302,10 @@ export default function Agendamentos({
     if (!form.tecnicoId) novosErros.tecnicoId = "Selecione um técnico.";
     if (!form.data) novosErros.data = "Informe a data.";
     if (!form.hora) novosErros.hora = "Informe o horário.";
+    // Trava do expediente: só aceita horários entre 07:00 e 19:00.
+    else if (minutosDoDia(form.hora) < 7 * 60 || minutosDoDia(form.hora) > 19 * 60) {
+      novosErros.hora = "Agende somente entre 07:00 e 19:00.";
+    }
 
     if (!novosErros.tecnicoId && !novosErros.data && !novosErros.hora) {
       const minutosReferencia = minutosDoDia(form.hora);
@@ -303,6 +328,7 @@ export default function Agendamentos({
     return Object.keys(novosErros).length === 0;
   }
 
+  // Valida e salva o agendamento (cadastra ou atualiza).
   async function salvar(event) {
     event.preventDefault();
     if (!validar()) return;
@@ -337,6 +363,7 @@ export default function Agendamentos({
     }
   }
 
+  // Avança o atendimento: inicia (desconta peças do estoque) ou conclui, e avisa o cliente pelo WhatsApp.
   async function avancar(atendimento) {
     if (!atendimento.ordemId) return;
     const iniciando = atendimento.ordemStatus === "aberta";
@@ -373,6 +400,7 @@ export default function Agendamentos({
     }
   }
 
+  // Cancela o agendamento (com confirmação).
   async function cancelar(atendimento) {
     const ok = await confirm(
       `Cancelar o agendamento de ${atendimento.clienteNome}?${atendimento.ordemId ? " A ordem de serviço aberta será removida junto." : ""}`,
@@ -390,6 +418,7 @@ export default function Agendamentos({
     }
   }
 
+  // Marca o atendimento como não realizado, pedindo o motivo.
   async function marcarNaoRealizado(atendimento) {
     const motivo = await pedirMotivo(
       "Por que o atendimento não pôde ser realizado? (ex.: cliente ausente, local fechado)",
@@ -398,15 +427,17 @@ export default function Agendamentos({
     if (!motivo) return;
 
     try {
-      await action(atendimento.id, "/nao-realizado", { motivo });
+      const resultado = await action(atendimento.id, "/nao-realizado", { motivo });
       await recarregarTudo();
       setBanner("");
       setSucesso("Atendimento registrado como não realizado.");
+      setAvisoWhatsApp(resultado?.aviso || null);
     } catch (actionError) {
       setBanner(actionError.message);
     }
   }
 
+  // Pede confirmação e exclui o agendamento.
   async function excluir(atendimento) {
     const ok = await confirm(
       `Excluir definitivamente o atendimento de ${atendimento.clienteNome}? Se ele estiver em andamento, as peças debitadas voltam ao estoque. Esta ação não pode ser desfeita.`,
@@ -424,12 +455,14 @@ export default function Agendamentos({
     }
   }
 
+  // Salva o pagamento do atendimento.
   async function salvarPagamento(payload) {
     await ordensServico.action(alvo.ordemId, "/pagamento", payload);
     await crud.reload();
     setSucesso("Pagamento registrado com sucesso.");
   }
 
+  // Cadastra um cliente pelo diálogo rápido e já o seleciona.
   async function cadastrarClienteRapido(payload) {
     const cliente = await clientes.add(payload);
     setForm((current) => ({ ...current, clienteId: String(cliente.id) }));
@@ -437,6 +470,7 @@ export default function Agendamentos({
     return cliente;
   }
 
+  // Separa os atendimentos por aba (ativos, concluídos, cancelados e não realizados).
   const porAba = {
     ativos: items.filter((a) => abaDoAtendimento(a) === "ativos"),
     concluidos: items.filter((a) => abaDoAtendimento(a) === "concluidos"),
@@ -444,6 +478,7 @@ export default function Agendamentos({
     nao_realizados: items.filter((a) => abaDoAtendimento(a) === "nao_realizados"),
   };
 
+  // Estados presentes na aba (para o filtro de status).
   const estadosDaAba = [];
   porAba[aba].forEach((atendimento) => {
     const estado = estadoDoAtendimento(atendimento);
@@ -452,6 +487,7 @@ export default function Agendamentos({
     }
   });
 
+  // Aplica busca, status e período à aba atual, em ordem de data e hora.
   const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR");
   const filteredItems = porAba[aba]
     .slice()
@@ -479,6 +515,7 @@ export default function Agendamentos({
       return searchable.includes(normalizedSearch);
     });
 
+  // Indicadores do topo (agendados, em andamento e demais totais).
   const stats = [
     {
       label: "Agendados",
@@ -506,6 +543,7 @@ export default function Agendamentos({
     },
   ];
 
+  // Listas para os campos de seleção (ativos, mantendo o item atual ao editar).
   const clientesDoSelect = [...clientesAtivos];
   if (
     emEditar &&
@@ -537,6 +575,7 @@ export default function Agendamentos({
     });
   }
 
+  // Limpa todos os filtros.
   function limparFiltros() {
     setStatusFilter("");
     setDateFrom("");
@@ -544,11 +583,13 @@ export default function Agendamentos({
     setSearch("");
   }
 
+  // Troca de aba e limpa o filtro de status.
   function trocarAba(novaAba) {
     setAba(novaAba);
     setStatusFilter("");
   }
 
+  // Abas da tela.
   const abas = [
     { key: "ativos", label: `Ativos (${porAba.ativos.length})` },
     { key: "concluidos", label: `Concluídos (${porAba.concluidos.length})` },
@@ -556,6 +597,7 @@ export default function Agendamentos({
     { key: "nao_realizados", label: `Não realizados (${porAba.nao_realizados.length})` },
   ];
 
+  // Monta a tela.
   return (
     <>
     <Layout
@@ -573,11 +615,13 @@ export default function Agendamentos({
         </button>
       )}
     >
+      {/* Conteúdo da página. */}
       <div className="scheduling-orders-screen schedule-screen">
         <ErrorBanner message={error || tecnicos?.error || banner} onClose={() => setBanner("")} />
         <SuccessBanner message={sucesso} onClose={() => setSucesso("")} />
         <AvisoWhatsApp aviso={avisoWhatsApp} onClose={() => setAvisoWhatsApp(null)} />
 
+        {/* Cartões de resumo dos atendimentos. */}
         <section className="orders-summary-grid" aria-label="Resumo dos atendimentos">
           {stats.map((stat) => (
             <article className={`orders-summary-card orders-summary-${stat.tone}`} key={stat.label}>
@@ -588,6 +632,7 @@ export default function Agendamentos({
           ))}
         </section>
 
+        {/* Formulário de novo agendamento ou edição (só CEO e atendente). */}
         {formularioAberto && !isTecnico && formKey && (
           <form className="form-card schedule-form" onSubmit={salvar}>
             <div className="schedule-form-heading">
@@ -665,6 +710,8 @@ export default function Agendamentos({
               <Field label="Horário" error={errors.hora}>
                 <TextInput
                   type="time"
+                  min="07:00"
+                  max="19:00"
                   value={form.hora}
                   onChange={(event) => setForm({ ...form, hora: event.target.value })}
                 />
@@ -682,6 +729,7 @@ export default function Agendamentos({
           </form>
         )}
 
+        {/* Abas: ativos, concluídos, cancelados e não realizados. */}
         <div className="schedule-tabs" role="tablist">
           {abas.map((item) => (
             <button
@@ -697,6 +745,7 @@ export default function Agendamentos({
           ))}
         </div>
 
+        {/* Barra de busca e filtros. */}
         <div className="schedule-toolbar" role="search">
           <label className="schedule-search">
             <Icon name="search" size={16} />
@@ -728,6 +777,7 @@ export default function Agendamentos({
           </button>
         </div>
 
+        {/* Filtros extras (status e período). */}
         {showFilters && (
           <div className="schedule-filter-panel">
             <label>
@@ -757,6 +807,7 @@ export default function Agendamentos({
             }
           />
         ) : (
+          /* Tabela de atendimentos com as ações de cada linha. */
           <div className="schedule-table-card">
             <div className="schedule-table-scroll">
               <table className="schedule-data-table schedule-appointments-table">
@@ -948,8 +999,10 @@ export default function Agendamentos({
         )}
       </div>
     </Layout>
+    {/* Diálogos de confirmação e de motivo. */}
     {confirmElement}
     {motivoElement}
+    {/* Cadastro rápido de cliente. */}
     {showQuickClient && (
       <QuickClientDialog
         clientesExistentes={clientItems}
@@ -957,6 +1010,7 @@ export default function Agendamentos({
         onCreate={cadastrarClienteRapido}
       />
     )}
+    {/* Detalhes do atendimento. */}
     {emDetalhe && alvo && (
       <AtendimentoDialog
         atendimento={alvo}
@@ -969,6 +1023,7 @@ export default function Agendamentos({
         onConsumoPecaExtra={() => onEstoqueAlterado?.()}
       />
     )}
+    {/* Pagamento do atendimento. */}
     {emPagamento && alvo && podeRegistrarPagamento(alvo) && (
       <PagamentoDialog
         atendimento={alvo}

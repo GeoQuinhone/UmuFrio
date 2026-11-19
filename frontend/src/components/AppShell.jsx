@@ -4,6 +4,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../AuthContext.jsx";
 import Icon from "./Icon.jsx";
 import NotificationBell from "./NotificationBell.jsx";
+import TemaToggle from "./TemaToggle.jsx";
 import { cargoLabel } from "../utils/cargo.js";
 import { atendimentosProximos, textoFaltam } from "../utils/avisoHorario.js";
 import { ROTAS } from "../routes.js";
@@ -108,6 +109,7 @@ export default function AppShell({ children, agendamentos = [] }) {
           </div>
 
           <div className="app-topbar-user">
+            <TemaToggle />
             <NotificationBell perfil={user?.perfil} usuarioId={user?.id} agendamentos={agendamentos} />
             <div className="app-user-copy app-user-cargo" title={user?.nome}>
               <span className={`app-cargo-chip cargo-${user?.perfil || "x"}`}>{cargoLabel(user?.perfil)}</span>

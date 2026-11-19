@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#12325b" />
+    <script>
+      // Aplica o tema salvo antes de desenhar a tela (evita piscar branco no modo escuro).
+      (function () {
+        try {
+          var t = localStorage.getItem("uf-tema");
+          if (t !== "dark" && t !== "light") t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          document.documentElement.setAttribute("data-theme", t);
+          if (t === "dark") document.querySelector('meta[name="theme-color"]').setAttribute("content", "#0f1a21");
+        } catch (e) {}
+      })();
+    </script>
     <title>UmuFrio — Gestão Operacional</title>
   </head>
   <body>

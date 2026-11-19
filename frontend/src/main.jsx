@@ -4,6 +4,8 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App.jsx";
 import "./styles.css";
 import "./mobile.css";
+import "./dark.css";
+import "./dark-extra.css";
 import { iniciarTabelasDeCelular } from "./mobileTables.js";
 
 iniciarTabelasDeCelular();

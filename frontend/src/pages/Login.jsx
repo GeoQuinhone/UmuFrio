@@ -4,6 +4,7 @@ import { useAuth } from "../AuthContext.jsx";
 import { apiRequest } from "../api.js";
 import ChatWidget from "../components/ChatWidget.jsx";
 import Icon from "../components/Icon.jsx";
+import TemaToggle from "../components/TemaToggle.jsx";
 import { useWhatsappUrl } from "../utils/whatsapp.js";
 import "./auth.css";
 
@@ -211,6 +212,7 @@ export default function Login() {
 
   return (
     <div className="auth-login">
+      <TemaToggle className="tema-toggle-fixo" />
       <section className="auth-login-art" aria-label="UmuFrio Gestão Técnica">
         <div className="auth-hero-brand">
           <span className="auth-hero-mark"><Icon name="wind" size={23} /></span>
@@ -273,13 +275,6 @@ export default function Login() {
                 </button>
               </span>
             </label>
-            <button
-              type="button"
-              className="auth-forgot"
-              onClick={abrirRecuperacao}
-            >
-              Esqueci minha senha
-            </button>
             <button className="auth-primary" type="submit" disabled={loading}>
               {loading ? "Entrando..." : "Entrar no painel"}
             </button>
