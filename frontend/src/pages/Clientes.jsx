@@ -8,9 +8,10 @@ import {
   Select,
   Badge,
   EmptyState,
-  ErrorBanner,
+  ErrorBanner, SuccessBanner,
 } from "../components/FormControls.jsx";
 import "./clients-users.css";
+import { useSucesso } from "../hooks/useSucesso.js";
 import { UFS, ufValida, nomeClienteValido, numeroImovelValido, filtrarNomePessoa, filtrarRazaoSocial, filtrarNumeroImovel } from "../utils/validacoes.js";
 
 import { mascaraTelefone, mascaraCep, documentoValido, formatarDocumento, tipoDoDocumento } from "../utils/mascaras.js";
@@ -221,6 +222,7 @@ export default function Clientes({ crud, onBack }) {
   const [showForm, setShowForm] = useState(false);
   const [errors, setErrors] = useState({});
   const [banner, setBanner] = useState("");
+  const [sucesso, setSucesso] = useSucesso();
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -234,6 +236,7 @@ export default function Clientes({ crud, onBack }) {
   };
 
   function iniciarNovo() {
+    setSucesso("");
     setForm(FORM_VAZIO);
     setEditingId(null);
     setErrors({});
@@ -356,10 +359,14 @@ export default function Clientes({ crud, onBack }) {
         await add({ ...payload, cpf: somenteDigitos(form.cpf) });
       }
 
+      const mensagem = editingId
+        ? "Cliente atualizado com sucesso."
+        : "Cliente cadastrado com sucesso.";
       setShowForm(false);
       setForm(FORM_VAZIO);
       setEditingId(null);
       setBanner("");
+      setSucesso(mensagem);
     } catch (saveError) {
       setBanner(saveError.message);
     } finally {
@@ -371,6 +378,11 @@ export default function Clientes({ crud, onBack }) {
     try {
       await action(cliente.id, "/status");
       setBanner("");
+      setSucesso(
+        clienteAtivo(cliente)
+          ? "Cliente inativado com sucesso."
+          : "Cliente reativado com sucesso.",
+      );
     } catch (actionError) {
       setBanner(actionError.message);
     }
@@ -386,6 +398,7 @@ export default function Clientes({ crud, onBack }) {
     try {
       await remove(cliente.id);
       setSelectedClient(null);
+      setSucesso("Cliente removido com sucesso.");
     } catch (removeError) {
       setBanner(removeError.message);
     }
@@ -433,6 +446,7 @@ export default function Clientes({ crud, onBack }) {
     >
       <div className="cu-module cu-clients">
         <ErrorBanner message={error || banner} onClose={() => setBanner("")} />
+        <SuccessBanner message={sucesso} onClose={() => setSucesso("")} />
 
         {!loading && !error && (
           <section className="cu-summary-grid" aria-label="Resumo de clientes">

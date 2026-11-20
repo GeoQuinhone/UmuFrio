@@ -462,3 +462,44 @@ input {
     text-overflow: clip !important;
   }
 }
+
+/* --- Notificações (sino) no celular: o painel ocupa a largura da tela, sob a barra --- */
+@media (max-width: 760px) {
+  .app-notification-wrap {
+    position: static;
+  }
+  .app-notification-popover.notif-popover {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-width: none;
+    max-height: calc(100dvh - 96px);
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .notif-head {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+  .notif-link {
+    min-height: 36px;
+    padding: 0 4px;
+    font-size: 12px;
+  }
+  .notif-pendencia {
+    min-height: 44px;
+    font-size: 13px;
+  }
+  .notif-item {
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+  .notif-item strong {
+    font-size: 13px;
+  }
+  .notif-item small {
+    font-size: 11px;
+  }
+}

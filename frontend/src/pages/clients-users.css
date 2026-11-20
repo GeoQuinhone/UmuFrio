@@ -13,6 +13,7 @@
   color: var(--cu-ink);
 }
 
+.cu-module .success-banner,
 .cu-module .error-banner {
   margin: 0;
 }

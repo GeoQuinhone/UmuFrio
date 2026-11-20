@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import Layout from "../components/Layout.jsx";
 import Icon from "../components/Icon.jsx";
-import { Field, TextInput, Select, EmptyState, ErrorBanner } from "../components/FormControls.jsx";
+import { Field, TextInput, Select, EmptyState, ErrorBanner, SuccessBanner } from "../components/FormControls.jsx";
+import { useSucesso } from "../hooks/useSucesso.js";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import { useApiCrud } from "../hooks/useApiCrud.js";
 import { mascaraMoeda, moedaParaNumero } from "../utils/mascaras.js";
@@ -44,6 +45,7 @@ export default function Despesas({ onBack }) {
   const [form, setForm] = useState(FORM_VAZIO);
   const [erros, setErros] = useState({});
   const [banner, setBanner] = useState("");
+  const [sucesso, setSucesso] = useSucesso();
   const [salvando, setSalvando] = useState(false);
 
   const filtradas = useMemo(() => {
@@ -123,6 +125,7 @@ export default function Despesas({ onBack }) {
       if (editingId) await update(editingId, payload);
       else await add(payload);
       setBanner("");
+      setSucesso(editingId ? "Despesa atualizada com sucesso." : "Despesa cadastrada com sucesso.");
       fechar();
     } catch (e) {
       setBanner(e.message);
@@ -140,6 +143,7 @@ export default function Despesas({ onBack }) {
     try {
       await remove(d.id);
       setBanner("");
+      setSucesso("Despesa excluída com sucesso.");
     } catch (e) {
       setBanner(e.message);
     }
@@ -160,6 +164,7 @@ export default function Despesas({ onBack }) {
       >
         <div className="catalog-page-content despesas-page">
           <ErrorBanner message={error || banner} onClose={() => setBanner("")} />
+          <SuccessBanner message={sucesso} onClose={() => setSucesso("")} />
 
           {showForm && (
             <form ref={formRef} className="catalog-form-card" onSubmit={salvar}>

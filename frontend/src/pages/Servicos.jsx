@@ -7,6 +7,7 @@ import {
   Badge,
   EmptyState,
   ErrorBanner,
+  SuccessBanner,
 } from "../components/FormControls.jsx";
 import { apiRequest } from "../api.js";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
@@ -14,6 +15,7 @@ import { useAuth } from "../AuthContext.jsx";
 import ProdutoSelect from "../components/ProdutoSelect.jsx";
 import { mascaraMoeda, moedaParaNumero } from "../utils/mascaras.js";
 import "./catalog-stock.css";
+import { useSucesso } from "../hooks/useSucesso.js";
 
 const moeda = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -148,6 +150,7 @@ export default function Servicos({ crud, estoque, onBack }) {
   });
   const [formError, setFormError] = useState("");
   const [banner, setBanner] = useState("");
+  const [sucesso, setSucesso] = useSucesso();
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
@@ -252,6 +255,10 @@ export default function Servicos({ crud, estoque, onBack }) {
         ),
       };
 
+      const mensagem =
+        editing === "new"
+          ? "Serviço cadastrado com sucesso."
+          : "Serviço atualizado com sucesso.";
       if (editing === "new") {
         await add(payload);
       } else {
@@ -271,6 +278,7 @@ export default function Servicos({ crud, estoque, onBack }) {
 
       setEditing(null);
       setBanner("");
+      setSucesso(mensagem);
     } catch (saveError) {
       setBanner(saveError.message);
     } finally {
@@ -296,6 +304,11 @@ export default function Servicos({ crud, estoque, onBack }) {
     try {
       await action(service.id, "/status");
       setBanner("");
+      setSucesso(
+        ativando
+          ? "Serviço reativado com sucesso."
+          : "Serviço inativado com sucesso.",
+      );
     } catch (actionError) {
       setBanner(actionError.message);
     }
@@ -313,6 +326,7 @@ export default function Servicos({ crud, estoque, onBack }) {
     try {
       await remove(service.id);
       setBanner("");
+      setSucesso("Serviço excluído com sucesso.");
       if (viewingService?.id === service.id) {
         setViewingService(null);
       }
@@ -383,6 +397,7 @@ export default function Servicos({ crud, estoque, onBack }) {
           message={error || banner}
           onClose={() => setBanner("")}
         />
+        <SuccessBanner message={sucesso} onClose={() => setSucesso("")} />
 
         {editing && (
           <form

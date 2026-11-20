@@ -179,7 +179,32 @@ Variáveis opcionais do backend (todas com valor padrão):
 | `CHAT_LIMITE_HORA` | teto de mensagens por hora (todas as pessoas) |
 | `CHECKIN_RAIO_METROS` | raio do check-in geolocalizado (padrão 150) |
 | `GEOCODING_EMAIL` | e-mail de contato para a busca de endereços (Nominatim) |
-| `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_TEMPLATE_*` | aviso automático ao cliente pelo WhatsApp (API oficial); sem eles, o aviso fica desligado |
+| `GUPSHUP_CUSTOMER_SECRET`, `GUPSHUP_APP_ID`, `GUPSHUP_SOURCE`, `GUPSHUP_APP_NAME`, `GUPSHUP_TEMPLATE_*` | aviso automático ao cliente pelo WhatsApp via Gupshup (ver abaixo) |
+| `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_TEMPLATE_*` | alternativa: aviso pela API da Meta direto; usada só se o Gupshup não estiver configurado |
+
+### Aviso automático pelo WhatsApp (Gupshup)
+
+Sem estas variáveis, o sistema continua funcionando: a tela mostra o botão
+"Enviar pelo WhatsApp" com a mensagem pronta.
+
+| Variável | Valor |
+| --- | --- |
+| `GUPSHUP_CUSTOMER_SECRET` | segredo da conta (Gupshup → Painel → Segredo da conta, 64 caracteres). **Segredo**: só no painel do Render. Vale até 90 dias: ao gerar outro, o anterior para de funcionar na hora, então troque aqui no mesmo momento |
+| `GUPSHUP_APP_ID` | ID do app no Gupshup (app → Configurações → ID do app) |
+| `GUPSHUP_API_KEY` | opcional: chave fixa antiga, usada só se não houver segredo; desligada pelo Gupshup em 31/03/2027 |
+| `WHATSAPP_NUMEROS_PERMITIDOS` | **proteção do banco de demonstração**: números (com DDD, separados por vírgula) que podem receber o envio automático, ex.: `44998049224`. Os outros clientes ficam só com o botão "Enviar pelo WhatsApp". **Apague** quando a empresa for usar com clientes reais |
+| `GUPSHUP_SOURCE` | número que envia, só dígitos com 55 (ex.: `554498890148`) |
+| `GUPSHUP_APP_NAME` | nome do app no Gupshup (ex.: `UmufrioAvisos`) |
+| `GUPSHUP_TEMPLATE_INICIADO` | ID do modelo `servico_iniciado` (Modelos → Gerenciar) |
+| `GUPSHUP_TEMPLATE_CONCLUIDO` | ID do modelo `servico_concluido` |
+| `GUPSHUP_TEMPLATE_NAO_REALIZADO` | ID do modelo `servico_nao_realizado` |
+
+Os três modelos são da categoria **Utilidade**, em **Portuguese (BR)**, com 4
+variáveis no corpo, nesta ordem de valores: {{1}} cliente, {{2}} serviço,
+{{3}} horário, {{4}} técnico. Cada mensagem é paga pela carteira do Gupshup:
+sem saldo, o envio falha e a tela oferece o link wa.me. Com o segredo, o
+sistema pede sozinho o token de 24 horas (CAT) e o renova antes de vencer;
+basta lembrar de gerar um segredo novo a cada 90 dias e atualizar no Render.
 
 ---
 

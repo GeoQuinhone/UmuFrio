@@ -1,0 +1,95 @@
+/* Ajustes à mão do tema escuro (o resto vem de dark.css, gerado automaticamente). */
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --uf-bg: #0f1a21;
+  --uf-surface: #16232c;
+  --uf-line: #2b3d49;
+  --uf-muted: #94a7b2;
+  --border: #2b3d49;
+  --page-bg: #0f1a21;
+  --surface: #16232c;
+  --surface-soft: #1b2b36;
+  --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 12px 30px rgba(0, 0, 0, 0.45);
+  --uf-shadow: 0 8px 26px rgba(0, 0, 0, 0.35);
+}
+
+html[data-theme="dark"] body,
+html[data-theme="dark"] #root {
+  background: #0f1a21;
+  color: #d4e0e7;
+}
+
+html[data-theme="dark"] .app-topbar {
+  background: rgba(22, 35, 44, 0.94);
+  border-bottom-color: #2b3d49;
+}
+
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea {
+  background-color: #1b2b36;
+  color: #e3edf2;
+  border-color: #34495a;
+}
+
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: #7f929d;
+}
+
+html[data-theme="dark"] option {
+  background: #1b2b36;
+  color: #e3edf2;
+}
+
+html[data-theme="dark"] table,
+html[data-theme="dark"] th,
+html[data-theme="dark"] td {
+  border-color: #2b3d49;
+}
+
+html[data-theme="dark"] .app-notification-button:hover,
+html[data-theme="dark"] .app-logout:hover {
+  background: #24394a;
+  color: #e6f0f5;
+}
+
+html[data-theme="dark"] .app-notification-button,
+html[data-theme="dark"] .app-logout {
+  color: #79bde0;
+}
+
+html[data-theme="dark"] hr {
+  border-color: #2b3d49;
+}
+
+html[data-theme="dark"] ::selection {
+  background: #2f6f8c;
+  color: #fff;
+}
+
+/* Botão de tema na tela de login (ainda sem barra de cima) */
+.tema-toggle-fixo {
+  position: fixed;
+  z-index: 30;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  right: 12px;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+  background: rgba(18, 50, 91, 0.55);
+  color: #fff;
+  box-shadow: none;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+html[data-theme="dark"] .tema-toggle-fixo {
+  background: rgba(22, 35, 44, 0.8);
+  border-color: #34495a;
+  color: #f2c14e;
+}

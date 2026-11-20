@@ -42,3 +42,15 @@ export function ErrorBanner({ message, onClose }) {
     </div>
   );
 }
+
+export function SuccessBanner({ message, onClose }) {
+  if (!message) return null;
+  return (
+    <div className="success-banner" role="status">
+      <span>{message}</span>
+      <button onClick={onClose} aria-label="Fechar">
+        ×
+      </button>
+    </div>
+  );
+}

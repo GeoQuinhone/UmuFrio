@@ -102,6 +102,12 @@ router.post(
         });
       }
 
+      if (perfil === "ceo") {
+        return res.status(403).json({
+          error: "Não é permitido cadastrar outro usuário com o perfil CEO.",
+        });
+      }
+
       if (!emailValido(email)) {
         return res.status(400).json({
           error: "E-mail inválido.",
@@ -198,6 +204,12 @@ router.put(
       ) {
         return res.status(400).json({
           error: "Preencha corretamente os dados do usuário.",
+        });
+      }
+
+      if (perfil === "ceo" && usuarioAtual[0].perfil !== "ceo") {
+        return res.status(403).json({
+          error: "Não é permitido promover um usuário ao perfil CEO.",
         });
       }
 
