@@ -10,10 +10,18 @@ export function situacaoEstoque(produto) {
   return "ok";
 }
 
-// Fase 9: limites realistas para uma oficina de refrigeração.
-// Um único ponto de ajuste (o front tem a mesma constante em utils/estoque.js).
-export const LIMITE_QUANTIDADE = 200; // saldo máximo por produto e por lançamento
-export const LIMITE_VALOR_UNITARIO = 50000; // R$ por unidade
+// Limites do cadastro de produto (Funcionalidade 5 da documentação de testes):
+// valor de 0 até 99.999.999,99 (o máximo de numeric(10,2) no banco); saldo e
+// quantidade mínima inteiros a partir de 0, com teto de segurança de
+// 99.999.999 para não estourar a coluna integer do banco.
+// Um único ponto de ajuste (o front tem as mesmas constantes em utils/estoque.js).
+export const LIMITE_QUANTIDADE = 99999999; // saldo máximo por produto e por lançamento
+export const LIMITE_VALOR_UNITARIO = 99999999.99; // R$ por unidade
+
+export const MENSAGEM_LIMITE_VALOR =
+  "Não é possível cadastrar produtos com valor acima de R$ 99.999.999,99.";
+export const MENSAGEM_LIMITE_QUANTIDADE =
+  "Não é possível cadastrar produtos com mais de 99.999.999 unidades.";
 
 export function quantidadeDentroDoLimite(valor) {
   const n = Number(valor);
