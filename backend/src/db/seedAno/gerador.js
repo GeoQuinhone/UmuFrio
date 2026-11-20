@@ -33,11 +33,13 @@ import {
  *  - nada é iniciado/concluído/pago depois do "agora".
  */
 
+// Constantes de tempo (minutos em milissegundos) e raio, em metros, usado para decidir se o check-in foi dentro do local.
 const MIN = 60 * 1000;
 const RAIO_M = 150;
 
 // ---------------------------------------------------------------- aleatório
 
+// Gerador de números pseudoaleatórios com semente fixa: a mesma semente sempre produz os mesmos dados.
 function criarRng(semente) {
   let a = semente >>> 0;
   const proximo = () => {
@@ -64,18 +66,22 @@ function criarRng(semente) {
 
 // -------------------------------------------------------------------- datas
 
+// Escreve o número com dois dígitos (ex.: 5 vira "05").
 const dois = (n) => String(n).padStart(2, "0");
 
+// Soma (ou subtrai) dias de uma data AAAA-MM-DD.
 export function somarDias(data, dias) {
   const d = new Date(`${data}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + dias);
   return d.toISOString().slice(0, 10);
 }
 
+// Conta os dias entre duas datas.
 export function diasEntre(de, ate) {
   return Math.round((Date.parse(`${ate}T12:00:00Z`) - Date.parse(`${de}T12:00:00Z`)) / 86400000);
 }
 
+// Descobre o dia da semana de uma data (0 = domingo).
 export function diaDaSemana(data) {
   return new Date(`${data}T12:00:00Z`).getUTCDay(); // 0 = domingo
 }
@@ -85,10 +91,12 @@ export function instante(data, minutos) {
   return new Date(`${data}T${dois(Math.floor(minutos / 60))}:${dois(minutos % 60)}:00-03:00`);
 }
 
+// Converte minutos desde a meia-noite em texto de hora (HH:MM).
 export function horaTexto(minutos) {
   return `${dois(Math.floor(minutos / 60))}:${dois(minutos % 60)}:00`;
 }
 
+// Calcula a data da Páscoa do ano (base dos feriados móveis, como Carnaval e Corpus Christi).
 function pascoa(ano) {
   const a = ano % 19;
   const b = Math.floor(ano / 100);
@@ -109,6 +117,7 @@ function pascoa(ano) {
 
 const cacheFeriados = new Map();
 
+// Monta o conjunto de feriados nacionais do ano, fixos e móveis.
 export function feriadosDoAno(ano) {
   if (cacheFeriados.has(ano)) return cacheFeriados.get(ano);
   const p = pascoa(ano);
@@ -122,9 +131,11 @@ export function feriadosDoAno(ano) {
   return lista;
 }
 
+// Atalhos: diz se a data é feriado e se é dia útil (não é domingo nem feriado).
 export const ehFeriado = (data) => feriadosDoAno(Number(data.slice(0, 4))).has(data);
 export const diaUtil = (data) => diaDaSemana(data) !== 0 && !ehFeriado(data);
 
+// Devolve o próximo dia útil a partir de uma data.
 function proximoDiaUtil(data) {
   let d = data;
   while (!diaUtil(d)) d = somarDias(d, 1);
@@ -133,6 +144,7 @@ function proximoDiaUtil(data) {
 
 // ------------------------------------------------------------------ pessoas
 
+// Calcula um dígito verificador do CPF.
 function digitoCpf(numeros) {
   let soma = 0;
   for (let i = 0; i < numeros.length; i += 1) soma += Number(numeros[i]) * (numeros.length + 1 - i);
@@ -140,11 +152,13 @@ function digitoCpf(numeros) {
   return resto === 10 ? 0 : resto;
 }
 
+// Completa 9 dígitos-base com os dois dígitos verificadores, formando um CPF válido (fictício).
 export function cpfDe(base9) {
   const d1 = digitoCpf(base9);
   return `${base9}${d1}${digitoCpf(`${base9}${d1}`)}`;
 }
 
+// Gera os clientes fictícios (pessoas e empresas) com endereço, telefone e coordenadas.
 function gerarClientes({ rng, telefoneWhatsapp, inicio, hoje }) {
   const cpfsUsados = new Set();
   const novoCpf = () => {
@@ -253,6 +267,7 @@ function gerarClientes({ rng, telefoneWhatsapp, inicio, hoje }) {
 
 // ------------------------------------------------------------------- agenda
 
+// Limites do expediente: último horário de início no sábado e na semana, tempo de deslocamento e fim do dia.
 const SABADO_ULTIMO_INICIO = 11 * 60 + 30;
 const SEMANA_ULTIMO_INICIO = 16 * 60 + 30;
 const DESLOCAMENTO_MIN = 20;
@@ -260,6 +275,7 @@ const FIM_DO_EXPEDIENTE = 19 * 60 + 30;
 
 const arredondaCima30 = (m) => Math.ceil(m / 30) * 30;
 
+// Diz se o mês é de verão ou inverno (muda a demanda de cada serviço).
 function estacao(mes) {
   if (mes >= 11 || mes <= 3) return "verao";
   if (mes >= 5 && mes <= 8) return "inverno";
@@ -274,10 +290,12 @@ export function inicioDoPeriodo(hoje) {
   return `${Math.floor(total / 12)}-${dois((total % 12) + 1)}-01`;
 }
 
+// Fim do período gerado: 31/12 do ano corrente.
 export function fimDoPeriodo(hoje) {
   return `${hoje.slice(0, 4)}-12-31`;
 }
 
+// Define quantos atendimentos entram em um dia, conforme sazonalidade, dia da semana e técnicos ativos.
 function demandaDoDia({ rng, data, hoje, fim, tecnicosAtivos }) {
   const mes = Number(data.slice(5, 7));
   let n = 4.8 * SAZONALIDADE[mes];
@@ -294,6 +312,7 @@ function demandaDoDia({ rng, data, hoje, fim, tecnicosAtivos }) {
   return Math.max(0, Math.min(Math.round(n), tecnicosAtivos * 5));
 }
 
+// Sorteia o serviço do atendimento considerando o peso de cada serviço na estação.
 function escolherServico({ rng, data }) {
   const est = estacao(Number(data.slice(5, 7)));
   const bases = SERVICOS.filter((s) => !s.substitui);
@@ -306,7 +325,8 @@ function variantePorData(chave, data) {
   return antigo && data < antigo.ate ? antigo.chave : chave;
 }
 
-function planejarAgenda({ rng, clientes, tecnicos, inicio, fim, hoje }) {
+// Monta a agenda: distribui os atendimentos entre técnicos e dias, sem conflito de horário.
+function planejarAgenda({ rng, clientes, tecnicos, inicio, fim, hoje, demandaFixa = {} }) {
   const dias = [];
   for (let d = inicio; d <= fim; d = somarDias(d, 1)) if (diaUtil(d)) dias.push(d);
 
@@ -336,7 +356,8 @@ function planejarAgenda({ rng, clientes, tecnicos, inicio, fim, hoje }) {
       if (ativoNaData(r.cliente, data)) pedidos.push(r);
     }
 
-    const alvo = demandaDoDia({ rng, data, hoje, fim, tecnicosAtivos: tecnicosDoDia.length });
+    // demandaFixa permite fixar quantos atendimentos entram em dias específicos (usado no seed de apresentação).
+    const alvo = demandaFixa[data] ?? demandaDoDia({ rng, data, hoje, fim, tecnicosAtivos: tecnicosDoDia.length });
     const elegiveis = clientes.filter((c) => ativoNaData(c, data));
     while (pedidos.length < alvo) {
       const cliente = rng.sorteio(elegiveis, (c) => c._peso);
@@ -382,8 +403,10 @@ function planejarAgenda({ rng, clientes, tecnicos, inicio, fim, hoje }) {
 
 // ---------------------------------------------------------------- principal
 
+// Formata valor em reais com duas casas decimais (texto).
 const dinheiro = (n) => (Math.round(n * 100) / 100).toFixed(2);
 
+// Converte um deslocamento em metros para graus de latitude/longitude.
 function metrosParaGraus(lat, nMetros, eMetros) {
   return {
     dLat: nMetros / 111320,
@@ -391,6 +414,7 @@ function metrosParaGraus(lat, nMetros, eMetros) {
   };
 }
 
+// Função principal do gerador: cria atendimentos, ordens de serviço, pagamentos (dinheiro, PIX, cartão), peças, estoque e check-ins, e devolve tudo junto com o resumo.
 export function gerarDados(entrada) {
   const {
     hoje,
@@ -399,6 +423,7 @@ export function gerarDados(entrada) {
     servicos: servicosDb,
     produtos: produtosDb,
     semente = 20261103,
+    demandaFixa = {},
     telefoneWhatsapp = "(44) 99804-9224",
   } = entrada;
 
@@ -424,7 +449,7 @@ export function gerarDados(entrada) {
   }));
 
   const clientes = gerarClientes({ rng, telefoneWhatsapp, inicio, hoje });
-  const agenda = planejarAgenda({ rng, clientes, tecnicos, inicio, fim, hoje });
+  const agenda = planejarAgenda({ rng, clientes, tecnicos, inicio, fim, hoje, demandaFixa });
 
   const agendamentos = [];
   const ordens = [];
@@ -788,6 +813,7 @@ function simularEstoque({ produtos, consumos, usuarios, inicio, agoraMs, hoje, a
   return { movimentacoes: movs, saldos: Object.fromEntries([...saldo.entries()]) };
 }
 
+// Monta o resumo (totais e faturamento por mês) mostrado ao fim do seed.
 function resumir({ clientes, agendamentos, ordens, pix, registros, estoque, produtosDb }) {
   const porStatusOs = {};
   for (const os of ordens) porStatusOs[os.status] = (porStatusOs[os.status] || 0) + 1;

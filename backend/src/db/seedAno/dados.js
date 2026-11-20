@@ -21,6 +21,7 @@ export const PRODUTOS = [
 ];
 
 // Produtos que o técnico às vezes precisa além das peças do serviço (peça extra).
+// Peças extras que o técnico às vezes usa além das do serviço.
 export const EXTRAS = [
   { chave: "cap355", peso: 5, qtd: [1, 1] },
   { chave: "cap25", peso: 3, qtd: [1, 1] },
@@ -59,6 +60,7 @@ export const SERVICOS = [
 
 // Peso de cada serviço por estação (verão = nov–mar). Instalação e recarga
 // sobem no calor; preventiva, limpeza e visita sobem no inverno.
+// Peso de cada serviço em cada estação.
 export const PESOS_SERVICO = {
   limpeza12: { verao: 20, meio: 22, inverno: 28 },
   limpeza18: { verao: 8, meio: 9, inverno: 12 },
@@ -74,11 +76,13 @@ export const PESOS_SERVICO = {
 };
 
 // Demanda relativa de cada mês (Umuarama é quente: pico de outubro a março).
+// Demanda relativa de cada mês do ano.
 export const SAZONALIDADE = {
   1: 1.25, 2: 1.2, 3: 1.1, 4: 0.9, 5: 0.7, 6: 0.55,
   7: 0.5, 8: 0.65, 9: 0.9, 10: 1.15, 11: 1.3, 12: 1.3,
 };
 
+// Listas de nomes, sobrenomes e empresas fictícias para gerar clientes.
 export const PRIMEIROS_M = ["João", "José", "Carlos", "Marcos", "Paulo", "Lucas", "Rafael", "Fernando", "Ricardo", "Eduardo", "André", "Thiago", "Gustavo", "Bruno", "Felipe", "Rodrigo", "Leandro", "Diego", "Marcelo", "Alexandre", "Sérgio", "Antônio", "Roberto", "Daniel", "Vinícius", "Gabriel", "Matheus", "Henrique", "Renato", "Fábio", "Wellington", "Adriano"];
 export const PRIMEIROS_F = ["Maria", "Ana", "Juliana", "Patrícia", "Fernanda", "Camila", "Aline", "Beatriz", "Luciana", "Carla", "Mariana", "Renata", "Adriana", "Cristiane", "Simone", "Tatiane", "Larissa", "Vanessa", "Débora", "Priscila", "Letícia", "Bianca", "Eliane", "Sandra", "Cláudia", "Rosana", "Elaine", "Michele", "Raquel", "Jéssica"];
 export const SOBRENOMES = ["Silva", "Santos", "Oliveira", "Souza", "Pereira", "Lima", "Costa", "Ferreira", "Rodrigues", "Almeida", "Nascimento", "Carvalho", "Gomes", "Martins", "Araújo", "Ribeiro", "Barbosa", "Moreira", "Cardoso", "Teixeira", "Mendes", "Rocha", "Dias", "Nunes", "Moraes", "Freitas", "Pinto", "Correia", "Machado", "Campos", "Batista", "Monteiro", "Fonseca", "Vieira", "Melo", "Cavalcante", "Azevedo", "Borges", "Prado", "Ramos"];
@@ -106,6 +110,7 @@ export const EMPRESAS = [
   { nome: "Óptica Visão Clara", intervalo: 120 },
 ];
 
+// Ruas e bairros fictícios de Umuarama, com deslocamento aproximado do centro.
 export const RUAS = ["Avenida Paraná", "Avenida Rio Branco", "Avenida Presidente Castelo Branco", "Avenida Ângelo Moreira da Fonseca", "Rua Desembargador Munhoz de Mello", "Rua Ministro Oliveira Salazar", "Rua Doutor Camargo", "Rua Santos Dumont", "Rua Peru", "Rua Espírito Santo", "Rua Pernambuco", "Rua Bahia", "Rua Goiás", "Rua Mato Grosso", "Rua Alagoas", "Rua das Américas", "Avenida Brasil", "Rua Rio Grande do Sul", "Avenida Maringá", "Rua São Paulo", "Rua Minas Gerais", "Rua Santa Catarina", "Rua Piauí", "Rua Sergipe"];
 
 // cep: 5 primeiros dígitos; dLat/dLng: deslocamento aproximado do centro, em
@@ -125,8 +130,10 @@ export const BAIRROS = [
   { nome: "Jardim América", cep: "87507", dLat: 0.01, dLng: -0.022 },
 ];
 
+// Coordenadas do centro de Umuarama (referência para os clientes).
 export const CENTRO_UMUARAMA = { lat: -23.765, lng: -53.325 };
 
+// Textos de exemplo: motivos de não realização, observações de acréscimo/desconto e justificativas de check-in fora do raio.
 export const MOTIVOS_NAO_REALIZADO = [
   { texto: "Cliente ausente no horário combinado.", peso: 5 },
   { texto: "Local fechado, ninguém atendeu.", peso: 3 },
@@ -157,6 +164,7 @@ export const JUSTIFICATIVAS_FORA_DO_RAIO = [
   "Cliente pediu que o serviço fosse feito na casa dos fundos.",
 ];
 
+// Formas de pagamento usadas na simulação.
 export const FORMAS_PAGAMENTO = [
   { forma: "pix", peso: 40 },
   { forma: "cartao_credito", peso: 22 },
@@ -164,6 +172,7 @@ export const FORMAS_PAGAMENTO = [
   { forma: "dinheiro", peso: 24 },
 ];
 
+// Usuários base do sistema de demonstração (CEO, atendente, estoquista e técnicos).
 export const USUARIOS_BASE = [
   { email: "ceo@umufrio.com.br", nome: "Fernanda Objetivo", telefone: "(44) 99101-0001", perfil: "ceo", cpf: "11122233344" },
   { email: "atendente@umufrio.com.br", nome: "Bruno Aguiar", telefone: "(44) 99101-0002", perfil: "atendente", cpf: "22233344455" },
@@ -171,9 +180,10 @@ export const USUARIOS_BASE = [
   { email: "tecnico1@umufrio.com.br", nome: "Diego Torres", telefone: "(44) 99101-0004", perfil: "tecnico", cpf: "44455566677" },
   { email: "tecnico2@umufrio.com.br", nome: "Eduarda Lima", telefone: "(44) 99101-0005", perfil: "tecnico", cpf: "55566677788" },
   { email: "tecnico3@umufrio.com.br", nome: "Henrique Matos", telefone: "(44) 99101-0006", perfil: "tecnico", cpf: null },
-  { email: "tecnico4@umufrio.com.br", nome: "Priscila Andrade", telefone: "(44) 99101-0007", perfil: "tecnico", cpf: null },
+  { email: "tecnico4@umufrio.com.br", nome: "Priscila Andrade", telefone: "(44) 99101-0007", perfil: "tecnico", cpf: null, desdeDias: 150 },
 ];
 
+// Veículos da frota de demonstração.
 export const VEICULOS = [
   { placa: "BEE4R22", marca: "Fiat", modelo: "Strada", ano: 2022 },
   { placa: "AYK8J51", marca: "Volkswagen", modelo: "Saveiro", ano: 2021 },
@@ -181,4 +191,16 @@ export const VEICULOS = [
   { placa: "QWE5B67", marca: "Renault", modelo: "Kangoo", ano: 2020 },
   { placa: "MFR3021", marca: "Fiat", modelo: "Fiorino", ano: 2018, status: "manutencao", semTecnico: true },
   { placa: "HOP7A19", marca: "Ford", modelo: "Courier", ano: 2014, status: "inativo", semTecnico: true },
+];
+
+// Usuários do seed de apresentação (db:seed-apresentacao): cada um com a sua senha.
+// "desdeDias": o técnico entrou há N dias e só aparece nos atendimentos a partir daí.
+export const USUARIOS_APRESENTACAO = [
+  { email: "alfaromario2024@umufrio.com.br", nome: "Romário Alfaro", telefone: "(44) 99201-0001", perfil: "ceo", cpf: "31245678973", senha: "romario2024" },
+  { email: "joaocintra@umufrio.com.br", nome: "João Cintra", telefone: "(44) 99201-0002", perfil: "atendente", cpf: "42356789065", senha: "joao2024" },
+  { email: "carlanunes@umufrio.com.br", nome: "Carla Nunes", telefone: "(44) 99201-0003", perfil: "estoquista", cpf: "53467890148", senha: "carla2024" },
+  { email: "geovanequinhone@umufrio.com.br", nome: "Geovane Quinhone", telefone: "(44) 99201-0004", perfil: "tecnico", cpf: "64578901211", senha: "geovane2024" },
+  { email: "diegotorres@umufrio.com.br", nome: "Diego Torres", telefone: "(44) 99201-0005", perfil: "tecnico", cpf: "75689012386", senha: "diego2024" },
+  { email: "eduardalima@umufrio.com.br", nome: "Eduarda Lima", telefone: "(44) 99201-0006", perfil: "tecnico", cpf: "86790123431", senha: "eduarda2024" },
+  { email: "henriquematos@umufrio.com.br", nome: "Henrique Matos", telefone: "(44) 99201-0007", perfil: "tecnico", cpf: "97801234588", senha: "henrique2024", desdeDias: 150 },
 ];

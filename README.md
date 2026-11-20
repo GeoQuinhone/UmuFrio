@@ -17,7 +17,6 @@ Projeto de TCC do curso de Tecnologia em Sistemas para Internet (UniALFA).
   primeiro acesso.
 - Perfis: `ceo`, `atendente`, `estoquista` e `tecnico`.
 - Bloqueio temporário do usuário após 5 tentativas de login inválidas.
-- Recuperação de senha informando apenas o e-mail cadastrado.
 - Gerenciamento de usuários (somente `ceo`).
 - Não há cadastro público de contas na tela de login. O primeiro `ceo` é criado
   uma única vez pelo endpoint `POST /api/auth/bootstrap` (veja
@@ -371,6 +370,7 @@ Três comandos, todos na pasta `backend/` e depois de `npm run db:migrate`:
 | `npm run db:seed` | Poucos dados (10 clientes, 18 atendimentos). Só roda com o banco sem clientes e com o CEO já criado. |
 | `npm run db:seed-teste -- --sim` | Carga curta (50 dias para trás, 5 à frente). **Apaga** clientes, atendimentos, PIX e estoque. |
 | `npm run db:seed-ano -- --sim` | **Carga anual**: ~13 meses de histórico e agenda até 31/12 do ano corrente. **Apaga** clientes, atendimentos, PIX, check-ins e movimentações de estoque e cria tudo de novo. |
+| `npm run db:seed-apresentacao -- --sim` | **Apresentação**: igual ao anual, mas como se hoje fosse **23/11/2026 às 19h** (troque com `--agora=2026-11-23T19:00:00-03:00`), com os logins da banca (CEO, atendente, estoquista e 4 técnicos, cada um com a sua senha) e a agenda dos próximos dias cheia. Desativa os logins de demonstração antigos. |
 
 O `db:seed-ano` gera, com semente fixa e respeitando as regras do sistema:
 
