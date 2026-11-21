@@ -311,8 +311,8 @@ export default function Usuarios({ crud, onBack }) {
     }
 
     if (!editingId || form.senha) {
-      if (form.senha.length < 6) {
-        novosErros.senha = "A senha deve possuir no mínimo 6 caracteres.";
+      if (form.senha.length < 6 || !form.senha.trim()) {
+        novosErros.senha = "A senha deve possuir no mínimo 6 caracteres e não pode ser só espaços.";
       }
     }
 

@@ -133,8 +133,9 @@ export default function CheckinPanel({ ordemId, ordemStatus }) {
   }
 
   async function confirmarComJustificativa() {
-    if (justificativa.trim().length < 5) {
-      setErro("Escreva uma justificativa (mínimo de 5 caracteres).");
+    const palavras = justificativa.trim().split(/\s+/).filter((p) => /\p{L}{2,}/u.test(p));
+    if (palavras.length < 2) {
+      setErro("Escreva o motivo com pelo menos duas palavras (ex.: sem vaga em frente).");
       return;
     }
     setErro("");
@@ -157,7 +158,12 @@ export default function CheckinPanel({ ordemId, ordemStatus }) {
     ) : null;
   }
 
-  const podeCheckin = info.podeRegistrar && !info.checkin && ordemStatus !== "concluida";
+  const checkinPendente = info.podeRegistrar && !info.checkin && ordemStatus !== "concluida";
+  // Fase 11: fora do dia do atendimento o botão vira um aviso.
+  const foraDoPrazo = checkinPendente && info.checkinNoPrazo === false;
+  const podeCheckin = checkinPendente && !foraDoPrazo;
+  const checkinAindaNaoAbriu =
+    foraDoPrazo && info.checkinAbreEm && new Date() < new Date(info.checkinAbreEm);
   const podeCheckout = info.podeRegistrar && info.checkin && !info.checkout && ordemStatus !== "aberta";
   const aguardaInicio = info.podeRegistrar && info.checkin && !info.checkout && ordemStatus === "aberta";
 
@@ -232,6 +238,14 @@ export default function CheckinPanel({ ordemId, ordemStatus }) {
             Raio permitido: {info.raioM} m do endereço do cliente.
           </small>
         </div>
+      )}
+
+      {!fora && foraDoPrazo && (
+        <p className="checkin-hint">
+          {checkinAindaNaoAbriu
+            ? `Check-in liberado a partir de ${formatDateTime(info.checkinAbreEm)} (2 horas antes do horário marcado).`
+            : "O dia deste atendimento já passou. Não é possível fazer o check-in."}
+        </p>
       )}
 
       {!fora && aguardaInicio && (

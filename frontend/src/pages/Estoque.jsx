@@ -14,7 +14,13 @@ import { useSucesso } from "../hooks/useSucesso.js";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import { mascaraMoeda, moedaParaNumero } from "../utils/mascaras.js";
 import ProdutoSelect from "../components/ProdutoSelect.jsx";
-import { situacaoEstoque, LIMITE_QUANTIDADE, LIMITE_VALOR_UNITARIO } from "../utils/estoque.js";
+import {
+  situacaoEstoque,
+  LIMITE_QUANTIDADE,
+  LIMITE_VALOR_UNITARIO,
+  MENSAGEM_LIMITE_QUANTIDADE,
+  MENSAGEM_LIMITE_VALOR,
+} from "../utils/estoque.js";
 
 // Evita o "05" ao digitar em campos numéricos que começam em 0.
 const semZeroAEsquerda = (valor) => String(valor).replace(/^0+(?=\d)/, "");
@@ -301,7 +307,7 @@ export default function Estoque({ crud, onBack }) {
     }
 
     if (valorUnitario > LIMITE_VALOR_UNITARIO) {
-      setFormError("Valor unitário acima do limite permitido.");
+      setFormError(MENSAGEM_LIMITE_VALOR);
       return;
     }
 
@@ -313,9 +319,7 @@ export default function Estoque({ crud, onBack }) {
     }
 
     if (saldo > LIMITE_QUANTIDADE || quantidadeMinima > LIMITE_QUANTIDADE) {
-      setFormError(
-        `Saldo e quantidade mínima devem ficar entre 0 e ${LIMITE_QUANTIDADE} unidades.`,
-      );
+      setFormError(MENSAGEM_LIMITE_QUANTIDADE);
       return;
     }
 
@@ -392,7 +396,7 @@ export default function Estoque({ crud, onBack }) {
     }
 
     if (quantidade > LIMITE_QUANTIDADE) {
-      setMovementError(`Cada lançamento aceita no máximo ${LIMITE_QUANTIDADE} unidades.`);
+      setMovementError(MENSAGEM_LIMITE_QUANTIDADE);
       return;
     }
 
@@ -400,9 +404,7 @@ export default function Estoque({ crud, onBack }) {
       movementForm.tipo === "entrada" &&
       Number(produto.saldo ?? 0) + quantidade > LIMITE_QUANTIDADE
     ) {
-      setMovementError(
-        `Limite de ${LIMITE_QUANTIDADE} unidades por produto: o saldo atual é ${produto.saldo ?? 0}, cabem mais ${Math.max(0, LIMITE_QUANTIDADE - Number(produto.saldo ?? 0))}.`,
-      );
+      setMovementError(MENSAGEM_LIMITE_QUANTIDADE);
       return;
     }
 

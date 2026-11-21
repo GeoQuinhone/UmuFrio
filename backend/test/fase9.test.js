@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   UFS, ufValida, nomePessoaValido, razaoSocialValida, nomeClienteValido, numeroImovelValido,
+  senhaValida, emailValido,
 } from "../src/validacoes.js";
 import { normalizarVinculos } from "../src/despesasRegras.js";
 import { LIMITE_QUANTIDADE, quantidadeDentroDoLimite } from "../src/estoqueRegras.js";
@@ -30,11 +31,12 @@ test("número do imóvel: só dígitos", () => {
   for (const n of ["12A", "S/N", "abc", "", "1234567", "-1", "1.5"]) assert.ok(!numeroImovelValido(n), n);
 });
 
-test("limite de estoque realista (200)", () => {
-  assert.equal(LIMITE_QUANTIDADE, 200);
+test("limite de estoque (99.999.999 unidades)", () => {
+  assert.equal(LIMITE_QUANTIDADE, 99999999);
   assert.ok(quantidadeDentroDoLimite(0));
-  assert.ok(quantidadeDentroDoLimite(200));
-  assert.ok(!quantidadeDentroDoLimite(201));
+  assert.ok(quantidadeDentroDoLimite(1));
+  assert.ok(quantidadeDentroDoLimite(99999999));
+  assert.ok(!quantidadeDentroDoLimite(100000000));
   assert.ok(!quantidadeDentroDoLimite(-1));
   assert.ok(!quantidadeDentroDoLimite(1.5));
 });
@@ -48,4 +50,14 @@ test("despesa: vínculo só com a categoria certa", () => {
   assert.deepEqual(normalizarVinculos("combustivel", { veiculoId: "" }), { veiculoId: null, funcionarioId: null });
   assert.ok(normalizarVinculos("combustivel", { veiculoId: "abc" }).erro);
   assert.ok(normalizarVinculos("salarios", { funcionarioId: -2 }).erro);
+});
+
+test("senha: 6 ou mais caracteres e não só espaços (CT22 a CT27)", () => {
+  for (const v of ["abc123", "abc1234", "  ab12"]) assert.ok(senhaValida(v), v);
+  for (const v of ["", "a", "abc12", "      ", null, undefined]) assert.ok(!senhaValida(v), String(v));
+});
+
+test("e-mail: formato conferido no servidor (CT33 e CT37)", () => {
+  for (const v of ["ana@teste.com", "ANA@Teste.com", "a.b@empresa.com.br"]) assert.ok(emailValido(v), v);
+  for (const v of ["anateste.com", "ana@", "@teste.com", "ana@teste", "", "ana @teste.com"]) assert.ok(!emailValido(v), v);
 });

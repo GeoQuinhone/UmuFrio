@@ -46,8 +46,10 @@ function ConfirmDialog({
   message,
   confirmLabel,
   cancelLabel,
+  extraLabel,
   danger,
   onConfirm,
+  onExtra,
   onCancel,
 }) {
   const dialogRef = useRef(null);
@@ -95,6 +97,12 @@ function ConfirmDialog({
           >
             {cancelLabel}
           </button>
+          {/* Fase 11: terceiro botão opcional (ex.: "Concluir com pagamento pendente"). */}
+          {extraLabel && (
+            <button type="button" className="btn-ghost" onClick={onExtra}>
+              {extraLabel}
+            </button>
+          )}
           <button
             type="button"
             className={danger ? "btn-danger" : "btn-primary"}
@@ -111,6 +119,7 @@ function ConfirmDialog({
 // Hook que substitui window.confirm por um modal visual acessível.
 // Uso: const { confirm, confirmElement } = useConfirm();
 //      const ok = await confirm("Excluir este item?", { danger: true });
+//      Com { extraLabel } aparece um terceiro botão, que devolve "extra".
 //      ...renderizar {confirmElement} em algum ponto do JSX da página.
 export function useConfirm() {
   const [pending, setPending] = useState(null);
@@ -122,6 +131,7 @@ export function useConfirm() {
         message,
         confirmLabel: options.confirmLabel || "Confirmar",
         cancelLabel: options.cancelLabel || "Cancelar",
+        extraLabel: options.extraLabel || null,
         danger: options.danger ?? true,
         resolve,
       });
@@ -139,8 +149,10 @@ export function useConfirm() {
       message={pending.message}
       confirmLabel={pending.confirmLabel}
       cancelLabel={pending.cancelLabel}
+      extraLabel={pending.extraLabel}
       danger={pending.danger}
       onConfirm={() => responder(true)}
+      onExtra={() => responder("extra")}
       onCancel={() => responder(false)}
     />
   ) : null;

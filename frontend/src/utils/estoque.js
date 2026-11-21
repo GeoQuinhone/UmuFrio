@@ -18,6 +18,10 @@ export function moedaProduto(valor) {
   return Number.isFinite(n) ? moeda.format(n) : "—";
 }
 
-// Fase 9: mesmos limites do back-end (backend/src/estoqueRegras.js).
-export const LIMITE_QUANTIDADE = 200;
-export const LIMITE_VALOR_UNITARIO = 50000;
+// Mesmos limites e mensagens do back-end (backend/src/estoqueRegras.js).
+export const LIMITE_QUANTIDADE = 99999999;
+export const LIMITE_VALOR_UNITARIO = 99999999.99;
+export const MENSAGEM_LIMITE_VALOR =
+  "Não é possível cadastrar produtos com valor acima de R$ 99.999.999,99.";
+export const MENSAGEM_LIMITE_QUANTIDADE =
+  "Não é possível cadastrar produtos com mais de 99.999.999 unidades.";

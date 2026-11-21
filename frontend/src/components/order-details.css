@@ -263,3 +263,47 @@
 .cu-phone { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .cu-contact-btn { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid #b9d6e3; border-radius: 999px; background: #f1f8fb; color: #176b9d; font-size: 12px; font-weight: 700; text-decoration: none; }
 .cu-contact-whats { border-color: #b5e3c8; background: #eefaf3; color: #1b7a47; }
+
+/* Fase 11: a mensagem de sucesso das peças ocupa a linha toda (não empurra os campos). */
+.os-extra-parts-form > .success-banner { grid-column: 1 / -1; margin: 0; }
+
+/* Fase 11: resumo do pagamento (serviço + peças +/- ajuste = total). */
+.pagamento-resumo { display: grid; gap: 6px; margin: 0 0 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: #f6fafc; }
+.pagamento-resumo > div { display: flex; justify-content: space-between; gap: 12px; font-size: 0.9rem; }
+.pagamento-resumo dt { color: var(--grey); }
+.pagamento-resumo dd { margin: 0; font-weight: 600; color: var(--navy); white-space: nowrap; }
+.pagamento-resumo-acrescimo dd { color: #b26a00; }
+.pagamento-resumo-desconto dd { color: #1e8a5a; }
+.pagamento-resumo-total { margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.pagamento-resumo-total dt { color: var(--navy); font-weight: 700; }
+.pagamento-resumo-total dd { font-size: 1.15rem; font-weight: 800; }
+.pagamento-ajuste-abrir { margin: 0 0 14px; }
+.pagamento-ajuste { margin: 0 0 14px; padding: 12px 14px 4px; border: 1px solid var(--border); border-radius: 10px; }
+.pagamento-ajuste legend { padding: 0 6px; font-size: 0.85rem; font-weight: 700; color: var(--navy); }
+.pagamento-ajuste-tipo { display: inline-flex; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+.pagamento-ajuste-tipo label { display: inline-flex; align-items: center; padding: 6px 16px; font-size: 0.85rem; font-weight: 600; color: var(--grey); cursor: pointer; }
+.pagamento-ajuste-tipo label.ativo { background: var(--deepblue); color: #fff; }
+.pagamento-ajuste-tipo input { position: absolute; opacity: 0; pointer-events: none; }
+.pagamento-ajuste-tipo label:focus-within { outline: 2px solid var(--teal); outline-offset: -2px; }
+.pagamento-ajuste-remover { margin: 4px 0 10px; font-size: 0.85rem; }
+
+/* Fase 11: motivo do "não realizado" em destaque nos detalhes. */
+.nao-realizado-motivo {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-left: 4px solid #c0392b;
+  border-radius: 6px;
+  background: #fdecea;
+  color: #8e2a20;
+  font-size: 0.95rem;
+}
+.nao-realizado-motivo strong { color: #8e2a20; }
+
+/* Fase 11: motivo do pagamento pendente em destaque nos detalhes. */
+.payment-summary-grid .pendencia-motivo {
+  border: 1px solid #f0d58c;
+  border-left: 4px solid #d99a00;
+  background: #fff7e0;
+}
+.payment-summary-grid .pendencia-motivo dt { color: #8a5a00; font-weight: 700; }
+.payment-summary-grid .pendencia-motivo dd { color: #6b4500; }

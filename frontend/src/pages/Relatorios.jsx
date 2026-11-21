@@ -1,7 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { API_URL, apiRequest } from "../api.js";
+import AtendimentoDialog from "../components/AtendimentoDialog.jsx";
+import PagamentoDialog from "../components/PagamentoDialog.jsx";
 import Icon from "../components/Icon.jsx";
 import Layout from "../components/Layout.jsx";
 import { formaPagamentoLabel, formatMoeda } from "../utils/atendimento.js";
@@ -27,7 +29,7 @@ const CRITERIOS = {
   estoque:
     "Considera as saídas de estoque feitas no período. O custo usa o preço unitário registrado na movimentação. “No mínimo ou abaixo” (saldo menor ou igual ao mínimo) e o valor em estoque mostram a situação de hoje.",
   atendimentos:
-    "Considera os atendimentos agendados dentro do período, pela data do agendamento. Os check-ins são os registrados nesses atendimentos; “fora do raio” é a posição do técnico além do limite do endereço do cliente. Clique em uma situação ou motivo para ver os pedidos.",
+    "Considera os atendimentos agendados dentro do período, pela data do agendamento. Os check-ins são os registrados nesses atendimentos; “fora do raio” é a posição do técnico além do limite do endereço do cliente. Clique em uma situação para ver os pedidos; o olho mostra os detalhes de cada um.",
 };
 
 const SITUACOES = [
@@ -142,7 +144,10 @@ function BarrasHorizontais({ itens, formatar, vazio, rotuloDe }) {
           <div className="rel-hbar-track" aria-hidden="true">
             <div
               className="rel-hbar-fill"
-              style={{ width: `${Math.max((item.valor / maximo) * 100, item.valor > 0 ? 1.5 : 0)}%` }}
+              style={{
+                width: `${Math.max((item.valor / maximo) * 100, item.valor > 0 ? 1.5 : 0)}%`,
+                ...(item.cor ? { background: item.cor } : {}),
+              }}
             />
           </div>
           {item.detalhe && <small>{item.detalhe}</small>}
@@ -320,6 +325,110 @@ function horaPeriodo(iso) {
   return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
 }
 
+// Fase 11: lista completa de agendamentos, carregada no 1º "Ver detalhes".
+let cacheAgendamentos = null;
+
+// Fase 11: abre a mesma janela de detalhes do Agendamentos, só para consulta.
+// Procura pelo id do agendamento ou da ordem de serviço (as listas de
+// pagamento trazem o id da ordem). Lá estão telefone, Ligar e WhatsApp.
+function useDetalhesAtendimento({ permitirPagamento = false, onPago } = {}) {
+  const [detalhe, setDetalhe] = useState(null);
+  const [erroDetalhe, setErroDetalhe] = useState("");
+  // Fase 11: em "Falta pagar", dá para registrar o pagamento pela própria janela.
+  const [pagando, setPagando] = useState(null);
+  const [sucesso, setSucesso] = useState("");
+
+  async function verDetalhes({ id, ordemId }) {
+    setErroDetalhe("");
+    try {
+      if (!cacheAgendamentos) cacheAgendamentos = apiRequest("/agendamentos");
+      const lista = await cacheAgendamentos;
+      const encontrado = lista.find((item) => (ordemId ? item.ordemId === ordemId : item.id === id));
+      if (!encontrado) throw new Error("Atendimento não encontrado.");
+      setDetalhe(encontrado);
+    } catch (falha) {
+      cacheAgendamentos = null;
+      setErroDetalhe(falha.message);
+    }
+  }
+
+  // Pagamento confirmado com o serviço em andamento já conclui (a mesma regra
+  // da tela de Agendamentos). Depois, o relatório é atualizado.
+  async function concluirSePreciso(atendimento) {
+    if (atendimento.ordemStatus === "andamento") {
+      await apiRequest(`/ordens-servico/${atendimento.ordemId}/avancar`, { method: "PATCH", body: "{}" });
+    }
+  }
+
+  function terminarPagamento(mensagem) {
+    cacheAgendamentos = null;
+    setPagando(null);
+    setDetalhe(null);
+    setSucesso(mensagem);
+    onPago?.();
+  }
+
+  async function salvarPagamento(payload) {
+    const atendimento = pagando;
+    await apiRequest(`/ordens-servico/${atendimento.ordemId}/pagamento`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    if (payload.pagamentoConfirmado) {
+      await concluirSePreciso(atendimento);
+      terminarPagamento(`Pagamento de ${atendimento.clienteNome} registrado.`);
+    }
+  }
+
+  async function pixAprovado() {
+    const atendimento = pagando;
+    try {
+      await concluirSePreciso(atendimento);
+    } finally {
+      terminarPagamento(`PIX de ${atendimento.clienteNome} aprovado.`);
+    }
+  }
+
+  const janela = (
+    <>
+      {detalhe && !pagando && (
+        <AtendimentoDialog
+          atendimento={detalhe}
+          perfil="ceo"
+          somenteLeitura
+          onPagamento={permitirPagamento && !detalhe.pagamentoConfirmado ? () => setPagando(detalhe) : undefined}
+          onClose={() => setDetalhe(null)}
+        />
+      )}
+      {pagando && (
+        <PagamentoDialog
+          atendimento={pagando}
+          perfil="ceo"
+          onSave={salvarPagamento}
+          onPagamentoConfirmado={pixAprovado}
+          onClose={() => setPagando(null)}
+        />
+      )}
+    </>
+  );
+  const aviso = (
+    <>
+      {erroDetalhe && <p className="catalog-form-error" role="alert">{erroDetalhe}</p>}
+      {sucesso && <p className="success-banner" role="status">{sucesso}</p>}
+    </>
+  );
+  return { verDetalhes, janela, aviso };
+}
+
+// Fase 11: olho "Ver detalhes" usado nas listas do relatório.
+function BotaoVer({ cliente, onClick }) {
+  return (
+    <button type="button" className="rel-ver" aria-label={`Ver detalhes do atendimento de ${cliente}`} title="Ver detalhes" onClick={onClick}>
+      <Icon name="eye" size={16} />
+    </button>
+  );
+}
+
 // Lista dos atendimentos por trás de um número do relatório (ponto: clicar em
 // "não realizado" mostra os pedidos). Busca em /relatorios/atendimentos.
 function ListaAtendimentos({ periodo, filtro, titulo, onFechar }) {
@@ -328,6 +437,7 @@ function ListaAtendimentos({ periodo, filtro, titulo, onFechar }) {
 
   useEffect(() => {
     let ativo = true;
+    cacheAgendamentos = null; // lista nova: os detalhes voltam a vir atualizados
     setEstado({ carregando: true, erro: "", dados: null });
     const params = new URLSearchParams({ de: periodo.de, ate: periodo.ate, situacao: filtro.situacao || "todos" });
     if (filtro.tecnicoId) params.set("tecnicoId", filtro.tecnicoId);
@@ -343,9 +453,18 @@ function ListaAtendimentos({ periodo, filtro, titulo, onFechar }) {
   }, [chave]);
 
   const { carregando, erro, dados } = estado;
+  const { verDetalhes, janela, aviso } = useDetalhesAtendimento();
+
+  // Fase 11: ao abrir (ou trocar) a lista, a tela rola até ela. Rola de novo
+  // quando os dados chegam, porque enquanto carrega a lista é curta e a página
+  // ainda não tem altura para levá-la até o topo.
+  const secaoRef = useRef(null);
+  useEffect(() => {
+    secaoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [chave, carregando]);
 
   return (
-    <section className="rel-panel rel-drill" aria-live="polite">
+    <section ref={secaoRef} className="rel-panel rel-drill" aria-live="polite">
       <div className="rel-drill-head">
         <h3>{titulo}</h3>
         <div className="rel-drill-actions">
@@ -357,6 +476,7 @@ function ListaAtendimentos({ periodo, filtro, titulo, onFechar }) {
       </div>
       {carregando && <Vazio texto="Carregando pedidos..." />}
       {erro && <p className="catalog-form-error" role="alert">{erro}</p>}
+      {aviso}
       {dados && dados.linhas.length === 0 && <Vazio texto="Nenhum pedido encontrado." />}
       {dados && dados.linhas.length > 0 && (
         <>
@@ -370,6 +490,7 @@ function ListaAtendimentos({ periodo, filtro, titulo, onFechar }) {
                   <th>Técnico</th>
                   <th>Situação</th>
                   <th className="num">Valor</th>
+                  <th><span className="rel-sr">Ver detalhes</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -383,12 +504,16 @@ function ListaAtendimentos({ periodo, filtro, titulo, onFechar }) {
                       <span className={`rel-tag rel-tag-${SITUACAO_TOM[l.situacao] || "neutro"}`}>
                         {NOMES_SITUACAO[l.situacao] || l.situacao}
                       </span>
-                      {l.situacao === "nao_realizado" && l.motivo && <small className="rel-motivo">{l.motivo}</small>}
                       {l.situacao === "concluido" && (
-                        <small className="rel-motivo">{l.pago ? "Pago" : "Pagamento pendente"}</small>
+                        <small className={`rel-motivo ${l.pago ? "rel-motivo-ok" : "rel-motivo-aviso"}`}>
+                          {l.pago ? "Pago" : "Pagamento pendente"}
+                        </small>
                       )}
                     </td>
                     <td className="num">{l.valor === null ? "—" : formatMoeda(l.valor)}</td>
+                    <td>
+                      <BotaoVer cliente={l.cliente} onClick={() => verDetalhes({ id: l.id })} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -399,6 +524,7 @@ function ListaAtendimentos({ periodo, filtro, titulo, onFechar }) {
           )}
         </>
       )}
+      {janela}
     </section>
   );
 }
@@ -409,9 +535,33 @@ function Variacao({ valor }) {
   return `${sinal}${Number(valor).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% vs. período anterior`;
 }
 
+// Fase 11: uma cor para cada forma de pagamento (selos e barras).
+const COR_FORMA = {
+  dinheiro: "#1e8a5a",
+  pix: "#1c8fb8",
+  cartao_debito: "#7b5cc4",
+  cartao_credito: "#d9822b",
+};
+
+function SeloForma({ forma }) {
+  return <span className={`rel-forma rel-forma-${forma || "sem"}`}>{formaPagamentoLabel(forma)}</span>;
+}
+
+// Fase 11: até 7 dias normal; de 8 a 30 amarelo; acima de 30 vermelho.
+function classeDias(dias) {
+  const d = Number(dias) || 0;
+  if (d > 30) return "rel-dias-atrasado";
+  if (d > 7) return "rel-dias-atencao";
+  return "";
+}
+
 // Quem já pagou no período e quem ainda falta pagar.
-function PagosEPendentes({ f }) {
+function PagosEPendentes({ f, onAtualizar }) {
   const [vista, setVista] = useState("pendentes");
+  const { verDetalhes, janela, aviso } = useDetalhesAtendimento({
+    permitirPagamento: true,
+    onPago: onAtualizar,
+  });
   const lista = vista === "pagos" ? f.pagos : f.pendentes;
   const total = vista === "pagos" ? f.quantidade : f.aReceber.quantidade;
 
@@ -420,15 +570,17 @@ function PagosEPendentes({ f }) {
       <div className="rel-drill-head">
         <h3>Pagamentos: quem pagou e quem falta</h3>
         <div className="rel-segment" role="tablist" aria-label="Pagamentos">
-          <button type="button" role="tab" aria-selected={vista === "pendentes"} className={vista === "pendentes" ? "is-active" : ""} onClick={() => setVista("pendentes")}>
-            Falta pagar ({numero(f.aReceber.quantidade)})
+          {/* Fase 11: "Falta pagar" em vermelho (atenção) e "Já pagaram" em verde. */}
+          <button type="button" role="tab" aria-selected={vista === "pendentes"} className={`rel-seg-falta ${vista === "pendentes" ? "is-active" : ""}`} onClick={() => setVista("pendentes")}>
+            Falta pagar (<span className="rel-seg-num">{numero(f.aReceber.quantidade)}</span>)
           </button>
-          <button type="button" role="tab" aria-selected={vista === "pagos"} className={vista === "pagos" ? "is-active" : ""} onClick={() => setVista("pagos")}>
+          <button type="button" role="tab" aria-selected={vista === "pagos"} className={`rel-seg-pagos ${vista === "pagos" ? "is-active" : ""}`} onClick={() => setVista("pagos")}>
             Já pagaram ({numero(f.quantidade)})
           </button>
         </div>
       </div>
 
+      {aviso}
       {lista.length === 0 ? (
         <Vazio texto={vista === "pagos" ? "Nenhum pagamento confirmado neste período." : "Nenhum pagamento pendente. Tudo em dia!"} />
       ) : (
@@ -442,6 +594,7 @@ function PagosEPendentes({ f }) {
                   <th>Serviço</th>
                   <th>Forma</th>
                   <th className="num">Valor</th>
+                  <th><span className="rel-sr">Ver detalhes</span></th>
                 </tr>
               ) : (
                 <tr>
@@ -450,6 +603,7 @@ function PagosEPendentes({ f }) {
                   <th>Serviço</th>
                   <th className="num">Em aberto</th>
                   <th className="num">Valor</th>
+                  <th><span className="rel-sr">Ver detalhes</span></th>
                 </tr>
               )}
             </thead>
@@ -460,16 +614,25 @@ function PagosEPendentes({ f }) {
                     <td>{horaPeriodo(l.pagoEm)}</td>
                     <td>{l.cliente}</td>
                     <td>{l.servico}</td>
-                    <td>{formaPagamentoLabel(l.forma)}</td>
+                    <td><SeloForma forma={l.forma} /></td>
                     <td className="num">{formatMoeda(l.valor)}</td>
+                    <td><BotaoVer cliente={l.cliente} onClick={() => verDetalhes({ ordemId: l.id })} /></td>
                   </tr>
                 ) : (
                   <tr key={l.id}>
                     <td>{dataBr(l.data)} {l.hora}</td>
                     <td>{l.cliente}</td>
                     <td>{l.servico}{l.ordemStatus !== "concluida" && <em className="rel-tag rel-tag-info rel-tag-inline">Em andamento</em>}</td>
-                    <td className="num">{l.diasEmAberto} d</td>
-                    <td className="num">{formatMoeda(l.valor)}</td>
+                    {/* Fase 11: quanto mais tempo em aberto, mais forte o alerta. */}
+                    <td className="num">
+                      {classeDias(l.diasEmAberto) ? (
+                        <span className={`rel-dias ${classeDias(l.diasEmAberto)}`}>{l.diasEmAberto} d</span>
+                      ) : (
+                        `${l.diasEmAberto} d`
+                      )}
+                    </td>
+                    <td className="num rel-valor-pendente">{formatMoeda(l.valor)}</td>
+                    <td><BotaoVer cliente={l.cliente} onClick={() => verDetalhes({ ordemId: l.id })} /></td>
                   </tr>
                 ),
               )}
@@ -480,11 +643,12 @@ function PagosEPendentes({ f }) {
       {total > lista.length && (
         <p className="rel-hint">Mostrando {lista.length} de {numero(total)}. A lista completa está no CSV.</p>
       )}
+      {janela}
     </section>
   );
 }
 
-function PainelFaturamento({ dados }) {
+function PainelFaturamento({ dados, onAtualizar }) {
   const f = dados.faturamento;
   return (
     <>
@@ -541,13 +705,15 @@ function PainelFaturamento({ dados }) {
           itens={f.porForma.map((i) => ({
             chave: i.forma || "sem",
             rotulo: i.forma ? formaPagamentoLabel(i.forma) : "Não informada",
+            // Fase 11: mesma cor do selo da forma de pagamento.
+            cor: COR_FORMA[i.forma],
             valor: Number(i.total),
             detalhe: `${numero(i.quantidade)} pagamento(s)`,
           }))}
         />
       </section>
 
-      <PagosEPendentes f={f} />
+      <PagosEPendentes f={f} onAtualizar={onAtualizar} />
     </>
   );
 }
@@ -576,21 +742,19 @@ function PainelServicos({ dados, periodo }) {
             valor: Number(i.quantidade),
             detalhe: `Receita ${formatMoeda(i.receita)} (${percentual(i.participacao)}) · ticket ${formatMoeda(i.ticketMedio)} · recebido ${formatMoeda(i.recebido)}${i.aReceber > 0 ? ` · a receber ${formatMoeda(i.aReceber)}` : ""}`,
           }))}
+          // Fase 11: clicar no próprio nome do serviço abre os atendimentos
+          // dele (antes havia uma fileira de botões repetindo os nomes).
+          rotuloDe={(item) => (
+            <button
+              type="button"
+              className="rel-nome-link"
+              title="Ver os atendimentos deste serviço"
+              onClick={() => setLista({ titulo: `Atendimentos concluídos — ${item.rotulo}`, filtro: { situacao: "concluidos", servicoId: item.chave } })}
+            >
+              {item.rotulo}
+            </button>
+          )}
         />
-        {s.ranking.length > 0 && (
-          <div className="rel-chips-row" aria-label="Ver atendimentos por serviço">
-            {s.ranking.map((i) => (
-              <button
-                key={i.id}
-                type="button"
-                className="rel-chip"
-                onClick={() => setLista({ titulo: `Atendimentos concluídos — ${i.nome}`, filtro: { situacao: "concluidos", servicoId: i.id } })}
-              >
-                {i.nome}
-              </button>
-            ))}
-          </div>
-        )}
       </section>
 
       <section className="rel-panel">
@@ -610,14 +774,22 @@ function PainelServicos({ dados, periodo }) {
                   <th className="num">Não realizados</th>
                   <th className="num">Cancelados</th>
                   <th className="num">Taxa de conclusão</th>
-                  <th className="num">Tempo médio</th>
                   <th><span className="rel-sr">Ver</span></th>
                 </tr>
               </thead>
               <tbody>
                 {s.tecnicos.map((t) => (
                   <tr key={t.id}>
-                    <td>{t.nome}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="rel-nome-link"
+                        title="Ver os atendimentos deste técnico"
+                        onClick={() => setLista({ titulo: `Atendimentos de ${t.nome}`, filtro: { situacao: "todos", tecnicoId: t.id } })}
+                      >
+                        {t.nome}
+                      </button>
+                    </td>
                     <td className="num">{numero(t.concluidos)}</td>
                     <td className="num">{formatMoeda(t.receita)}</td>
                     <td className="num">{formatMoeda(t.ticketMedio)}</td>
@@ -625,7 +797,6 @@ function PainelServicos({ dados, periodo }) {
                     <td className="num">{numero(t.naoRealizados)}</td>
                     <td className="num">{numero(t.cancelados)}</td>
                     <td className="num">{percentual(t.taxaConclusao)}</td>
-                    <td className="num">{duracao(t.tempoMedioMin)}</td>
                     <td>
                       <button
                         type="button"
@@ -757,27 +928,7 @@ function PainelAtendimentos({ dados, periodo }) {
         )}
       </section>
 
-      <section className="rel-panel">
-        <h3>Motivos de não realização</h3>
-        {a.motivos.length === 0 ? (
-          <Vazio texto="Nenhum atendimento não realizado neste período." />
-        ) : (
-          <ul className="rel-list">
-            {a.motivos.map((m) => (
-              <li key={m.motivo}>
-                <button
-                  type="button"
-                  className="rel-status-button"
-                  onClick={() => setLista({ titulo: `Não realizados — ${m.motivo}`, filtro: { situacao: "naoRealizados", motivo: m.motivo } })}
-                >
-                  {m.motivo}
-                </button>
-                <strong>{numero(m.quantidade)}</strong>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {/* Fase 11: sem o quadro de motivos; o motivo aparece nos detalhes (olho). */}
 
       {lista && <ListaAtendimentos periodo={periodo} filtro={lista.filtro} titulo={lista.titulo} onFechar={() => setLista(null)} />}
     </>
@@ -807,6 +958,14 @@ export default function Relatorios({ onBack }) {
     return () => {
       ativo = false;
     };
+  }, [periodo]);
+
+  // Fase 11: depois de registrar um pagamento pelo relatório, atualiza os
+  // números sem piscar a tela.
+  const atualizarDados = useCallback(() => {
+    apiRequest(`/relatorios?de=${periodo.de}&ate=${periodo.ate}`)
+      .then(setDados)
+      .catch((falha) => setErro(falha.message));
   }, [periodo]);
 
   const intervaloInvalido = !de || !ate || de > ate;
@@ -1013,7 +1172,7 @@ export default function Relatorios({ onBack }) {
               </p>
             )}
 
-            {aba === "faturamento" && <PainelFaturamento dados={dados} />}
+            {aba === "faturamento" && <PainelFaturamento dados={dados} onAtualizar={atualizarDados} />}
             {aba === "servicos" && <PainelServicos dados={dados} periodo={dados.periodo} />}
             {aba === "estoque" && <PainelEstoque dados={dados} />}
             {aba === "atendimentos" && <PainelAtendimentos dados={dados} periodo={dados.periodo} />}

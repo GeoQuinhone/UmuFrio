@@ -158,6 +158,23 @@ export default function Agendamentos({
   const [errors, setErrors] = useState({});
   const [banner, setBanner] = useState("");
   const [sucesso, setSucesso] = useSucesso();
+  // Fase 11: linha do atendimento que acabou de ser iniciado (destaque).
+  const [destacadoId, setDestacadoId] = useState(null);
+
+  useEffect(() => {
+    if (!destacadoId) return undefined;
+    // Leva a linha para a vista e tira o destaque depois de alguns segundos.
+    const quadro = window.requestAnimationFrame(() => {
+      document
+        .querySelector(`[data-atendimento-id="${destacadoId}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    const tempo = window.setTimeout(() => setDestacadoId(null), 6000);
+    return () => {
+      window.cancelAnimationFrame(quadro);
+      window.clearTimeout(tempo);
+    };
+  }, [destacadoId]);
   const [avisoWhatsApp, setAvisoWhatsApp] = useState(null);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
@@ -169,6 +186,12 @@ export default function Agendamentos({
   const abaInicial = new URLSearchParams(location.search).get("aba");
   const [aba, setAba] = useState(
     ["ativos", "concluidos", "cancelados", "nao_realizados"].includes(abaInicial) ? abaInicial : "ativos",
+  );
+  // Fase 11: ?pagamento=pendente (atalho do Início) mostra só os concluídos
+  // com pagamento a receber, para a atendente ou o CEO cobrarem. Vale só
+  // nessa entrada: ao trocar de aba, a lista volta ao normal.
+  const [soPendentes, setSoPendentes] = useState(
+    new URLSearchParams(location.search).get("pagamento") === "pendente",
   );
 
   // Listas auxiliares: clientes, técnicos e serviços ativos, e se os dados ainda estão carregando.
@@ -369,25 +392,59 @@ export default function Agendamentos({
     const iniciando = atendimento.ordemStatus === "aberta";
     const cliente = atendimento.clienteNome;
 
-    let mensagem;
-    if (iniciando) {
-      mensagem = `Iniciar o atendimento de ${cliente}? As peças vinculadas ao serviço serão debitadas do estoque.`;
-    } else if (!pagamentoConfirmado(atendimento)) {
-      mensagem = `Concluir o atendimento de ${cliente}? O pagamento ainda não foi confirmado.`;
+    // Fase 11: sem o pagamento registrado, o técnico escolhe entre registrar
+    // agora ou concluir com o pagamento pendente (informando o motivo).
+    let corpo;
+    if (!iniciando && !pagamentoConfirmado(atendimento)) {
+      const escolha = await confirm(
+        `O pagamento de ${cliente} ainda não foi registrado. Registre o pagamento agora ou conclua com o pagamento pendente (será pedido o motivo).`,
+        {
+          title: "Concluir atendimento",
+          confirmLabel: "Registrar pagamento",
+          extraLabel: "Concluir com pagamento pendente",
+          cancelLabel: "Voltar",
+          danger: false,
+        },
+      );
+      if (escolha === true) {
+        navigate(`${LISTA}/${atendimento.id}/pagamento`);
+        return;
+      }
+      if (escolha !== "extra") return;
+
+      const motivo = await pedirMotivo(
+        "Por que não foi possível receber o pagamento na hora? (ex.: cliente vai pagar na empresa, só estavam funcionários no local, cliente pediu para pagar depois)",
+        {
+          title: "Pagamento pendente",
+          confirmLabel: "Concluir",
+          placeholder: "Ex.: cliente vai pagar na empresa amanhã",
+          danger: false,
+          minimo: 5,
+        },
+      );
+      if (!motivo) return;
+      corpo = { motivoPagamentoPendente: motivo };
     } else {
-      mensagem = `Concluir o atendimento de ${cliente}?`;
+      const ok = await confirm(
+        iniciando
+          ? `Iniciar o atendimento de ${cliente}? As peças vinculadas ao serviço serão debitadas do estoque.`
+          : `Concluir o atendimento de ${cliente}?`,
+        {
+          title: iniciando ? "Iniciar atendimento" : "Concluir atendimento",
+          confirmLabel: iniciando ? "Iniciar" : "Concluir",
+          danger: false,
+        },
+      );
+      if (!ok) return;
     }
 
-    const ok = await confirm(mensagem, {
-      title: iniciando ? "Iniciar atendimento" : "Concluir atendimento",
-      confirmLabel: iniciando ? "Iniciar" : "Concluir",
-      danger: false,
-    });
-    if (!ok) return;
-
         try {
-      const resultado = await ordensServico.action(atendimento.ordemId, "/avancar");
+      const resultado = await ordensServico.action(atendimento.ordemId, "/avancar", corpo);
       await recarregarTudo();
+      // Fase 11: o atendimento iniciado sobe para o topo e fica destacado.
+      // Ao concluir, vai para a aba Concluídos, onde ele aparece em 1º.
+      if (!iniciando) trocarAba("concluidos");
+      setDestacadoId(atendimento.id);
       setBanner("");
       setSucesso(
         iniciando
@@ -457,9 +514,32 @@ export default function Agendamentos({
 
   // Salva o pagamento do atendimento.
   async function salvarPagamento(payload) {
-    await ordensServico.action(alvo.ordemId, "/pagamento", payload);
+    const atendimento = alvo;
+    await ordensServico.action(atendimento.ordemId, "/pagamento", payload);
+    // Fase 11: pagamento confirmado com o serviço em andamento já conclui.
+    if (payload.pagamentoConfirmado && atendimento.ordemStatus === "andamento") {
+      await concluirDepoisDoPagamento(atendimento);
+      return;
+    }
     await crud.reload();
     setSucesso("Pagamento registrado com sucesso.");
+  }
+
+  // Fase 11: pagou, concluiu. Usa a mesma rota do botão Concluir (avisa o
+  // cliente no WhatsApp e notifica o CEO); como já está pago, não pede motivo.
+  async function concluirDepoisDoPagamento(atendimento) {
+    try {
+      const resultado = await ordensServico.action(atendimento.ordemId, "/avancar");
+      await recarregarTudo();
+      trocarAba("concluidos");
+      setDestacadoId(atendimento.id);
+      setBanner("");
+      setSucesso("Pagamento registrado e atendimento concluído.");
+      setAvisoWhatsApp(resultado?.aviso || null);
+    } catch (concluirError) {
+      await crud.reload();
+      setBanner(`Pagamento registrado, mas não foi possível concluir: ${concluirError.message}`);
+    }
   }
 
   // Cadastra um cliente pelo diálogo rápido e já o seleciona.
@@ -491,15 +571,24 @@ export default function Agendamentos({
   const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR");
   const filteredItems = porAba[aba]
     .slice()
-    .sort((a, b) =>
-      aba === "ativos"
-        ? chaveDataHora(a).localeCompare(chaveDataHora(b))
-        : chaveDataHora(b).localeCompare(chaveDataHora(a)),
-    )
+    .sort((a, b) => {
+      // Fase 11: concluídos pela hora da conclusão (o último concluído em 1º).
+      if (aba === "concluidos") {
+        return String(b.concluidaEm || "").localeCompare(String(a.concluidaEm || ""))
+          || chaveDataHora(b).localeCompare(chaveDataHora(a));
+      }
+      if (aba !== "ativos") return chaveDataHora(b).localeCompare(chaveDataHora(a));
+      // Fase 11: em andamento sempre no topo (o técnico acha na hora quem
+      // ele acabou de iniciar); depois os agendados por data e hora.
+      const andamentoA = a.ordemStatus === "andamento" ? 0 : 1;
+      const andamentoB = b.ordemStatus === "andamento" ? 0 : 1;
+      return andamentoA - andamentoB || chaveDataHora(a).localeCompare(chaveDataHora(b));
+    })
     .filter((atendimento) => {
       const data = String(atendimento.data || "").slice(0, 10);
       const estado = estadoDoAtendimento(atendimento);
       if (statusFilter && estado.key !== statusFilter) return false;
+      if (soPendentes && (atendimento.ordemStatus !== "concluida" || pagamentoConfirmado(atendimento))) return false;
       if (dateFrom && (!data || data < dateFrom)) return false;
       if (dateTo && (!data || data > dateTo)) return false;
       if (!normalizedSearch) return true;
@@ -587,6 +676,7 @@ export default function Agendamentos({
   function trocarAba(novaAba) {
     setAba(novaAba);
     setStatusFilter("");
+    setSoPendentes(false);
   }
 
   // Abas da tela.
@@ -777,6 +867,7 @@ export default function Agendamentos({
           </button>
         </div>
 
+
         {/* Filtros extras (status e período). */}
         {showFilters && (
           <div className="schedule-filter-panel">
@@ -832,13 +923,21 @@ export default function Agendamentos({
                       atendimento.status === "agendado" &&
                       atendimento.ordemStatus !== "concluida";
                     const mostraPagamento = podeRegistrarPagamento(atendimento);
+                    // Fase 11: a carteira só aparece depois de concluído (em
+                    // andamento, o pagamento passa pelo botão Concluir).
                     const podeAlterarPagamento =
-                      mostraPagamento && (!pagamentoConfirmado(atendimento) || isCeo);
+                      mostraPagamento &&
+                      atendimento.ordemStatus === "concluida" &&
+                      (!pagamentoConfirmado(atendimento) || isCeo);
                     const podeExcluir =
                       isCeo && atendimento.ordemStatus !== "concluida";
 
                     return (
-                      <tr key={atendimento.id}>
+                      <tr
+                        key={atendimento.id}
+                        data-atendimento-id={atendimento.id}
+                        className={destacadoId === atendimento.id ? "schedule-row-destaque" : undefined}
+                      >
                         <td>
                           <span className="schedule-primary-cell">{formatDayMonth(atendimento.data)}</span>
                           <small className="schedule-secondary-cell">{formatDate(atendimento.data)}</small>
@@ -893,11 +992,7 @@ export default function Agendamentos({
                               </Badge>
                             </small>
                           )}
-                          {Boolean(atendimento.naoRealizado && atendimento.motivoNaoRealizado) && (
-                            <small className="schedule-secondary-cell" title={atendimento.motivoNaoRealizado}>
-                              {atendimento.motivoNaoRealizado}
-                            </small>
-                          )}
+                          {/* Fase 11: o motivo do "não realizado" fica só nos detalhes. */}
                         </td>
                         <td className="schedule-row-actions">
                           <button
@@ -1020,7 +1115,11 @@ export default function Agendamentos({
         onPagamento={() =>
           navigate(`${LISTA}/${alvo.id}/pagamento`, { state: { from: "detalhe" } })
         }
-        onConsumoPecaExtra={() => onEstoqueAlterado?.()}
+        onConsumoPecaExtra={() => {
+          // Recarrega o atendimento para o valor das peças entrar no pagamento.
+          onEstoqueAlterado?.();
+          crud.reload();
+        }}
       />
     )}
     {/* Pagamento do atendimento. */}
@@ -1029,7 +1128,10 @@ export default function Agendamentos({
         atendimento={alvo}
         perfil={user?.perfil}
         onSave={salvarPagamento}
-        onPagamentoConfirmado={() => crud.reload()}
+        onPagamentoConfirmado={() =>
+          // PIX aprovado: se o serviço ainda estava em andamento, conclui.
+          alvo.ordemStatus === "andamento" ? concluirDepoisDoPagamento(alvo) : crud.reload()
+        }
         onClose={fecharPagamento}
       />
     )}

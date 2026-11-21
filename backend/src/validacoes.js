@@ -10,6 +10,19 @@ export function ufValida(uf) {
   return UFS.includes(String(uf || "").trim().toUpperCase());
 }
 
+// Senha: no mínimo 6 caracteres e não pode ser formada só por espaços
+// (defeito CT27 da documentação de testes).
+export function senhaValida(senha) {
+  const s = String(senha ?? "");
+  return s.length >= 6 && s.trim().length > 0;
+}
+
+// E-mail no formato nome@dominio.ext, conferido também no servidor
+// (defeito CT37: antes só a tela conferia).
+export function emailValido(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
+}
+
 // Nome de pessoa: só letras (com acentos), espaço, apóstrofo, hífen e ponto.
 export function nomePessoaValido(nome) {
   const t = String(nome || "").trim();
