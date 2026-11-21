@@ -325,9 +325,6 @@ function horaPeriodo(iso) {
   return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
 }
 
-// Fase 11: lista completa de agendamentos, carregada no 1º "Ver detalhes".
-let cacheAgendamentos = null;
-
 // Fase 11: abre a mesma janela de detalhes do Agendamentos, só para consulta.
 // Procura pelo id do agendamento ou da ordem de serviço (as listas de
 // pagamento trazem o id da ordem). Lá estão telefone, Ligar e WhatsApp.
@@ -341,13 +338,13 @@ function useDetalhesAtendimento({ permitirPagamento = false, onPago } = {}) {
   async function verDetalhes({ id, ordemId }) {
     setErroDetalhe("");
     try {
-      if (!cacheAgendamentos) cacheAgendamentos = apiRequest("/agendamentos");
-      const lista = await cacheAgendamentos;
+      // Busca na hora a cada clique: assim a janela mostra o mesmo que Agendamentos
+      // (conclusão, motivo do pagamento pendente, peças), sem dados guardados velhos.
+      const lista = await apiRequest("/agendamentos");
       const encontrado = lista.find((item) => (ordemId ? item.ordemId === ordemId : item.id === id));
       if (!encontrado) throw new Error("Atendimento não encontrado.");
       setDetalhe(encontrado);
     } catch (falha) {
-      cacheAgendamentos = null;
       setErroDetalhe(falha.message);
     }
   }
@@ -361,7 +358,6 @@ function useDetalhesAtendimento({ permitirPagamento = false, onPago } = {}) {
   }
 
   function terminarPagamento(mensagem) {
-    cacheAgendamentos = null;
     setPagando(null);
     setDetalhe(null);
     setSucesso(mensagem);
@@ -437,7 +433,6 @@ function ListaAtendimentos({ periodo, filtro, titulo, onFechar }) {
 
   useEffect(() => {
     let ativo = true;
-    cacheAgendamentos = null; // lista nova: os detalhes voltam a vir atualizados
     setEstado({ carregando: true, erro: "", dados: null });
     const params = new URLSearchParams({ de: periodo.de, ate: periodo.ate, situacao: filtro.situacao || "todos" });
     if (filtro.tecnicoId) params.set("tecnicoId", filtro.tecnicoId);
