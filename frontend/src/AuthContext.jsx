@@ -5,6 +5,8 @@ import React, {
   useState,
 } from "react";
 
+import { useNavigate } from "react-router-dom";
+
 import { apiRequest, setAuthCallback } from "./api.js";
 
 const AuthContext = createContext(null);
@@ -12,10 +14,14 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
-  function logout() {
+  // Fase 11: ao sair, limpa também o endereço (ex.: /agendamentos), para não reaparecer no próximo login.
+  // Sessão expirada leva ao login; sair pelo botão leva à página inicial.
+  function logout(destino = "/") {
     localStorage.removeItem("token");
     setUser(null);
+    navigate(destino, { replace: true });
   }
 
   async function loadUser() {
@@ -31,7 +37,7 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    setAuthCallback(logout);
+    setAuthCallback(() => logout("/login"));
 
     const token = localStorage.getItem("token");
 
@@ -53,6 +59,8 @@ export function AuthProvider({ children }) {
 
     localStorage.setItem("token", data.token);
     setUser(data.usuario);
+    // Fase 11: todo login começa no painel inicial.
+    navigate("/", { replace: true });
   }
 
   return (
@@ -61,7 +69,7 @@ export function AuthProvider({ children }) {
         user,
         loading,
         login,
-        logout,
+        logout: () => logout(),
         setUser,
       }}
     >

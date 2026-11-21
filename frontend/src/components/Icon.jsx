@@ -126,6 +126,7 @@ const icons = {
     </>
   ),
   menu: <path d="M4 6h16M4 12h16M4 18h16" />,
+  close: <path d="M6 6l12 12M18 6 6 18" />,
   clock: (
     <>
       <circle cx="12" cy="12" r="9" />

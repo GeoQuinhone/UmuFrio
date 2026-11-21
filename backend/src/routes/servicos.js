@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "../db/client.js";
 import {
   servicos,
@@ -7,8 +7,34 @@ import {
   produtos,
 } from "../db/schema.js";
 import { roles, validId } from "../security.js";
+import { erroHttp } from "../httpError.js";
 
 const router = Router();
+
+// Fase 11: confere se o estoque comporta as peças do serviço (soma peças repetidas) e recusa o que passar do saldo.
+async function conferirEstoque(pecas) {
+  if (!pecas.length) return;
+  const necessario = new Map();
+  for (const peca of pecas) {
+    const idProduto = Number(peca.produtoId);
+    necessario.set(idProduto, (necessario.get(idProduto) || 0) + Number(peca.quantidadeNecessaria));
+  }
+  const linhas = await db
+    .select({ id: produtos.id, nome: produtos.nome, saldo: produtos.saldo })
+    .from(produtos)
+    .where(inArray(produtos.id, [...necessario.keys()]));
+  const porId = new Map(linhas.map((linha) => [linha.id, linha]));
+  for (const [idProduto, quantidade] of necessario) {
+    const produto = porId.get(idProduto);
+    if (!produto) throw erroHttp("Existe uma peça com produto que não está no estoque.", 400);
+    if (quantidade > Number(produto.saldo)) {
+      throw erroHttp(
+        `Estoque insuficiente de "${produto.nome}" para este serviço. Necessário: ${quantidade}. Disponível: ${produto.saldo}.`,
+        400,
+      );
+    }
+  }
+}
 
 async function incluirPecas(servico) {
   if (!servico) {
@@ -120,6 +146,8 @@ router.post(
           });
         }
       }
+
+      await conferirEstoque(pecas);
 
       const servico = await db.transaction(async (tx) => {
         const [novoServico] = await tx
@@ -266,6 +294,8 @@ router.put(
           error: "Lista de peças inválida.",
         });
       }
+
+      await conferirEstoque(pecas);
 
       const servico = await db.transaction(async (tx) => {
         const rows = await tx

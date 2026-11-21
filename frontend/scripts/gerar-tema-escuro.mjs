@@ -46,6 +46,10 @@ function fundo(hex) {
 function texto(hex) {
   const [h, s, l] = rgbToHsl(hexToRgb(hex));
   if (l > 0.62) return null;                       // já é claro (texto sobre botão colorido)
+  // Fase 11: texto neutro (cinza, azul-acinzentado, azul-marinho) vira branco puro; só cores vivas
+  // (verde, vermelho, âmbar, azul de destaque) continuam coloridas, para manter o significado.
+  if (s < 0.55) return "#ffffff";
+  if (l < 0.28 && h >= 200 && h <= 235) return "#ffffff"; // azul-marinho da marca
   const nl = Math.min(0.93, 0.98 - l * 0.85);
   return hsl(h, Math.min(s, 0.6), Math.max(nl, 0.62));
 }
@@ -82,7 +86,7 @@ const BRD = /^(border|border-top|border-bottom|border-left|border-right|border-c
 
 // Variáveis do app usadas direto nas regras (valores do tema escuro)
 const VAR_FUNDO = { "--surface": "#16232c", "--surface-soft": "#1b2b36", "--page-bg": "#0f1a21", "--uf-surface": "#16232c", "--uf-bg": "#0f1a21", "--ice": "#1b2f3a", "--white": "#16232c" };
-const VAR_TEXTO = { "--uf-navy": "#e6f0f5", "--navy": "#e6f0f5", "--uf-ink": "#d4e0e7", "--dark": "#e3edf2", "--grey": "#a9b8c1", "--uf-muted": "#94a7b2", "--deepblue": "#79bde0", "--teal": "#6cc3d3", "--uf-blue": "#6cc3d3", "--uf-teal": "#6cc3d3" };
+const VAR_TEXTO = { "--uf-navy": "#ffffff", "--navy": "#ffffff", "--uf-ink": "#ffffff", "--dark": "#ffffff", "--grey": "#ffffff", "--uf-muted": "#ffffff", "--cu-navy": "#ffffff", "--cu-ink": "#ffffff", "--cu-muted": "#ffffff", "--cu-blue": "#6cc3d3", "--red": "#ff8f82", "--green": "#6fd3a0", "--amber": "#f2c14e", "--deepblue": "#79bde0", "--teal": "#6cc3d3", "--uf-blue": "#6cc3d3", "--uf-teal": "#6cc3d3" };
 const VAR_BORDA = { "--uf-line": "#2b3d49", "--border": "#2b3d49" };
 function trocarVars(valor, mapa) {
   let mudou = false;

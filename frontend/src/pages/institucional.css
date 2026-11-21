@@ -2,6 +2,9 @@
 .inst-topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px clamp(16px, 5vw, 56px); background: rgba(255,255,255,.94); border-bottom: 1px solid #dfe9ec; backdrop-filter: blur(6px); }
 .inst-brand { display: inline-flex; align-items: center; gap: 10px; color: #12325b; text-decoration: none; font-size: 18px; }
 .inst-brand-mark { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 9px; background: linear-gradient(145deg, #1f88b5, #45b8b0); color: #fff; }
+/* Fase 11: botão hambúrguer (escondido no computador) e margem para as âncoras não ficarem sob a barra fixa. */
+.inst-menu-toggle { display: none; width: 42px; height: 42px; place-items: center; padding: 0; border: 1px solid #cfdde3; border-radius: 10px; background: #fff; color: #12325b; cursor: pointer; }
+.inst-section, .inst-hero { scroll-margin-top: 72px; }
 .inst-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; font-weight: 600; }
 .inst-nav a { color: #405b6b; text-decoration: none; }
 .inst-nav a:hover { color: #176b9d; }
@@ -42,5 +45,11 @@
 .inst-footer a { color: #176b9d; text-decoration: none; font-weight: 700; }
 @media (max-width: 820px) {
   .inst-hero, .inst-contact, .inst-mvv { grid-template-columns: 1fr; }
-  .inst-topbar { position: static; }
+  .inst-topbar { position: sticky; }
+  .inst-menu-toggle { display: inline-grid; }
+  .inst-nav { display: none; position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; align-items: stretch; gap: 0; padding: 8px clamp(16px, 5vw, 56px) 14px; background: #fff; border-bottom: 1px solid #dfe9ec; box-shadow: 0 12px 24px rgba(18, 50, 91, .12); }
+  .inst-nav.inst-nav-open { display: flex; }
+  .inst-nav a { padding: 12px 4px; border-bottom: 1px solid #eef3f5; font-size: 15px; }
+  .inst-nav .inst-login { margin-top: 10px; padding: 12px 14px; border-bottom: 0; text-align: center; }
+  
 }
