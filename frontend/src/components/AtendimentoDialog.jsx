@@ -398,6 +398,24 @@ export default function AtendimentoDialog({
           <>
             <Timeline atendimento={atendimento} />
 
+            {/* Fase 11: aviso antecipado para resolver a peça antes de ir ao cliente. */}
+            {atendimento.ordemStatus === "aberta" && atendimento.pecasFaltando?.length > 0 && (
+              <div className="os-falta-peca" role="status">
+                <strong>Falta peça no estoque para este atendimento:</strong>
+                <ul>
+                  {atendimento.pecasFaltando.map((peca) => (
+                    <li key={peca.nome}>
+                      {peca.nome}: precisa {peca.necessario}, há {peca.saldo}
+                    </li>
+                  ))}
+                </ul>
+                <small>
+                  Resolva antes de sair (estoquista confere o saldo ou a peça é comprada). Se ainda faltar, dá para
+                  iniciar mesmo assim informando o motivo.
+                </small>
+              </div>
+            )}
+
             <CheckinPanel
               ordemId={atendimento.ordemId}
               ordemStatus={atendimento.ordemStatus}

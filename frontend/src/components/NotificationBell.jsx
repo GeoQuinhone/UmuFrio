@@ -19,6 +19,7 @@ const ICONES = {
   atendimento_concluido: ["check", "ok"],
   nao_realizado: ["alertTriangle", "erro"],
   cancelado: ["ban", "aviso"],
+  falta_peca: ["package", "aviso"],
 };
 
 export function tempoRelativo(iso, agora = new Date()) {

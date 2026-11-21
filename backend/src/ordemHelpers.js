@@ -66,6 +66,19 @@ export function sqlValorExtras(ordemIdRef) {
       WHERE m.ordem_servico_id = ${ordemIdRef} AND m.extra = 1)`;
 }
 
+// Fase 11: peças do serviço que faltam no estoque hoje (só para ordens ainda
+// não iniciadas). Lista vazia = tudo em ordem. Serve para avisar o técnico e a
+// empresa antes do dia, e não trava nada: quem decide é quem inicia.
+export function sqlPecasFaltando(servicoIdRef, statusRef) {
+  return sql`CASE WHEN ${statusRef} = 'aberta' THEN (
+      SELECT COALESCE(json_agg(json_build_object(
+               'nome', p.nome, 'necessario', sp.quantidade_necessaria, 'saldo', p.saldo
+             ) ORDER BY p.nome), '[]'::json)
+        FROM servico_pecas sp JOIN produtos p ON p.id = sp.produto_id
+       WHERE sp.servico_id = ${servicoIdRef} AND p.saldo < sp.quantidade_necessaria
+    ) ELSE '[]'::json END`;
+}
+
 export async function valorExtrasDaOrdem(executor, ordemId) {
   const resultado = await executor.execute(sql`SELECT ${sqlValorExtras(sql`${ordemId}::int`)} AS total`);
   const linha = (resultado.rows ?? resultado)[0];

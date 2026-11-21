@@ -609,3 +609,16 @@
 }
 html[data-theme="dark"] .schedule-row-destaque > td { animation-name: schedule-destaque-escuro; }
 html[data-theme="dark"] .schedule-row-destaque > td:first-child { animation-name: schedule-destaque-escuro, schedule-destaque-barra; }
+
+/* Fase 11: selo "Falta peça" na lista (aviso antecipado de estoque). */
+.schedule-falta-peca {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #fff3d6;
+  color: #8a5a00;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: help;
+}

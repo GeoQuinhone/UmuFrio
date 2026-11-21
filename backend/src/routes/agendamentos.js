@@ -12,7 +12,7 @@ import {
   veiculos,
 } from "../db/schema.js";
 import { roles, validId } from "../security.js";
-import { erroHttp, excluirOrdem, sqlValorExtras } from "../ordemHelpers.js";
+import { erroHttp, excluirOrdem, sqlPecasFaltando, sqlValorExtras } from "../ordemHelpers.js";
 import { notificar } from "../notificacoes.js";
 import { avisarCliente } from "../whatsapp.js";
 
@@ -56,6 +56,8 @@ function selecaoUnificada() {
       servicoNome: servicos.nome,
       servicoValor: servicos.valor,
       extrasValor: sqlValorExtras(ordensServico.id),
+      // Fase 11: peças que faltam no estoque para este atendimento (aviso antecipado).
+      pecasFaltando: sqlPecasFaltando(ordensServico.servicoId, ordensServico.status),
       ordemStatus: ordensServico.status,
       abertaEm: ordensServico.abertaEm,
       iniciadaEm: ordensServico.iniciadaEm,

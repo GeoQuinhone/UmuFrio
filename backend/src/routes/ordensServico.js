@@ -460,6 +460,8 @@ router.patch(
       }
 
       const produtosTocados = [];
+      // Fase 11: peças que faltaram ao iniciar (o atendimento seguiu com motivo).
+      let pecasEmFalta = [];
 
       const ordemAtualizada = await db.transaction(
         async (tx) => {
@@ -603,27 +605,46 @@ router.patch(
                 ),
               );
 
-            for (const peca of pecas) {
-              if (peca.saldo < peca.quantidade) {
-                const error = new Error(
-                  `Estoque insuficiente de "${peca.nome}". Necessário: ${peca.quantidade}. Disponível: ${peca.saldo}.`,
-                );
-                error.status = 409;
-                throw error;
-              }
+            // Fase 11: faltar peça não impede o atendimento. Sem motivo, o
+            // sistema avisa o que falta (para o técnico, a atendente ou o CEO
+            // decidirem); com motivo (ex.: "comprei na loja X", "o saldo
+            // estava errado"), inicia, baixa só o que existe e registra a falta.
+            const faltando = pecas.filter((peca) => peca.saldo < peca.quantidade);
+            const motivoFalta = String(req.body?.motivoFaltaPeca ?? "").trim();
+
+            if (faltando.length && motivoFalta.length < 5) {
+              const lista = faltando
+                .map((peca) => `"${peca.nome}" (necessário ${peca.quantidade}, disponível ${peca.saldo})`)
+                .join(", ");
+              throw erroHttp(`Falta peça no estoque: ${lista}.`, 409, {
+                codigo: "FALTA_PECA",
+                faltando: faltando.map((peca) => ({
+                  nome: peca.nome,
+                  necessario: peca.quantidade,
+                  saldo: peca.saldo,
+                })),
+              });
             }
+            if (motivoFalta.length > 200) {
+              throw erroHttp("O motivo pode ter no máximo 200 caracteres.", 400);
+            }
+            pecasEmFalta = faltando.map((peca) => ({ ...peca, motivo: motivoFalta }));
 
             for (const peca of pecas) {
+              // Baixa só o que o estoque tem (nunca fica negativo).
+              const quantidadeBaixa = Math.min(peca.quantidade, Math.max(peca.saldo, 0));
+              if (quantidadeBaixa <= 0) continue;
+
               const [produtoAtualizado] =
                 await tx
                   .update(produtos)
                   .set({
-                    saldo: sql`${produtos.saldo} - ${peca.quantidade}`,
+                    saldo: sql`${produtos.saldo} - ${quantidadeBaixa}`,
                   })
                   .where(
                     and(
                       eq(produtos.id, peca.produtoId),
-                      sql`${produtos.saldo} >= ${peca.quantidade}`,
+                      sql`${produtos.saldo} >= ${quantidadeBaixa}`,
                     ),
                   )
                   .returning();
@@ -645,7 +666,7 @@ router.patch(
                   usuarioId: req.usuario.id,
                   ordemServicoId: id,
                   tipo: "saida",
-                  quantidade: peca.quantidade,
+                  quantidade: quantidadeBaixa,
                   valorUnitario: peca.valorUnitario,
                 });
             }
@@ -720,6 +741,21 @@ router.patch(
             `${dadosAviso.servicoNome} para ${dadosAviso.clienteNome}.` +
             (pendente ? " Pagamento pendente." : ""),
         });
+
+        // Fase 11: o atendimento começou com falta de peça; o CEO fica sabendo
+        // para corrigir o saldo (erro do estoquista) ou registrar a compra fora.
+        if (pecasEmFalta.length) {
+          const lista = pecasEmFalta
+            .map((peca) => `${peca.nome} (faltou ${peca.quantidade - Math.max(peca.saldo, 0)})`)
+            .join(", ");
+          await notificar({
+            tipo: "falta_peca",
+            agendamentoId: ordemAtualizada.agendamentoId,
+            ordemId: ordemAtualizada.id,
+            titulo: "Atendimento iniciado com falta de peça",
+            mensagem: `${dadosAviso.clienteNome}: ${lista}. Motivo: ${pecasEmFalta[0].motivo}`,
+          });
+        }
       }
 
       const aviso = dadosAviso

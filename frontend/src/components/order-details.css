@@ -307,3 +307,17 @@
 }
 .payment-summary-grid .pendencia-motivo dt { color: #8a5a00; font-weight: 700; }
 .payment-summary-grid .pendencia-motivo dd { color: #6b4500; }
+
+/* Fase 11: aviso de peça em falta nos detalhes do atendimento. */
+.os-falta-peca {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid #f0d58c;
+  border-left: 4px solid #d99a00;
+  border-radius: 8px;
+  background: #fff7e0;
+  color: #6b4500;
+  font-size: 0.88rem;
+}
+.os-falta-peca ul { margin: 6px 0; padding-left: 18px; }
+.os-falta-peca small { display: block; color: #8a5a00; }
