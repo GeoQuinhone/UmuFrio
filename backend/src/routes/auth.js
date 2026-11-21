@@ -3,7 +3,7 @@ import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, pool } from "../db/client.js";
 import { usuarios } from "../db/schema.js";
-import { nomePessoaValido } from "../validacoes.js";
+import { nomePessoaValido, senhaValida } from "../validacoes.js";
 import {
   hashPassword,
   onlyDigits,
@@ -146,7 +146,7 @@ router.post("/bootstrap", async (req, res, next) => {
       !email ||
       !cpfValido(cpf) ||
       !telefone ||
-      senha.length < 6
+      !senhaValida(senha)
     ) {
       await client.query("ROLLBACK");
 
@@ -235,10 +235,11 @@ router.post("/trocar-senha", requireAuth, async (req, res, next) => {
     const senhaAtual = String(req.body.senhaAtual || "");
     const novaSenha = String(req.body.novaSenha || "");
 
-    // A nova senha precisa ter pelo menos 6 caracteres.
-    if (novaSenha.length < 6) {
+    // A nova senha precisa ter pelo menos 6 caracteres e não pode ser só espaços
+    // (mesma regra do cadastro de usuários).
+    if (!senhaValida(novaSenha)) {
       return res.status(400).json({
-        error: "A nova senha deve ter no mínimo 6 caracteres.",
+        error: "A nova senha deve ter no mínimo 6 caracteres e não pode ser só espaços.",
       });
     }
 

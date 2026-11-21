@@ -23,7 +23,7 @@ export const app = express();
 
 // Fase 11: a API fica atrás de proxy (Render). Sem isto o limite do chat (12 msgs por IP) valeria para todos os
 // visitantes juntos. TRUST_PROXY = número de proxies entre o visitante e a API (padrão 1).
-// app.set("trust proxy", Number(process.env.TRUST_PROXY ?? 1));
+app.set("trust proxy", Number(process.env.TRUST_PROXY ?? 1));
 
 // Em produção, CORS_ORIGIN lista os endereços do frontend autorizados a chamar
 // a API (separados por vírgula). Sem a variável, como no ambiente local, a API
