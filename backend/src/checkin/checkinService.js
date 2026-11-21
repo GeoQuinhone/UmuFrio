@@ -24,6 +24,36 @@ export function raioPermitidoMetros(env = process.env) {
   return Math.min(Math.max(Math.round(valor), 20), 5000);
 }
 
+// Fase 11: o check-in só vale no dia do atendimento, a partir de 2 horas antes
+// do horário marcado até o fim daquele dia (horário de Brasília).
+const ANTECEDENCIA_CHECKIN_MIN = 120;
+
+export function janelaCheckin(data, hora) {
+  if (!data || !hora) return null;
+  const horario = new Date(`${data}T${String(hora).slice(0, 5)}:00-03:00`);
+  if (Number.isNaN(horario.getTime())) return null;
+  return {
+    abre: new Date(horario.getTime() - ANTECEDENCIA_CHECKIN_MIN * 60 * 1000),
+    fecha: new Date(`${data}T23:59:59.999-03:00`),
+  };
+}
+
+function dataHoraBrasilia(data) {
+  return data.toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).replace(",", " às");
+}
+
+// Justificativa de fora do raio: pelo menos duas palavras (evita "ffffff").
+export function justificativaValida(texto) {
+  const palavras = String(texto ?? "").trim().split(/\s+/).filter((p) => /\p{L}{2,}/u.test(p));
+  return palavras.length >= 2;
+}
+
 const COLUNAS = `
   id,
   tipo,
@@ -42,6 +72,8 @@ async function carregarOrdem(q, ordemId) {
             o.status,
             a.tecnico_id AS "tecnicoId",
             a.status AS "agendamentoStatus",
+            to_char(a.data, 'YYYY-MM-DD') AS "dataAgendada",
+            to_char(a.hora, 'HH24:MI') AS "horaAgendada",
             c.id AS "clienteId",
             c.logradouro, c.numero, c.bairro, c.cidade, c.estado, c.cep,
             c.latitude::float8 AS latitude,
@@ -108,12 +140,21 @@ export async function obterReferenciaCliente(q, ordem, { geocodificar = geocodif
   return ponto;
 }
 
-export async function consultarLocalizacao(q, { ordemId, usuario }, { env = process.env } = {}) {
+export async function consultarLocalizacao(
+  q,
+  { ordemId, usuario },
+  { env = process.env, agora = new Date() } = {},
+) {
   const ordem = await carregarOrdem(q, ordemId);
   exigirAcessoLeitura(ordem, usuario);
   const registros = agrupar(await registrosDaOrdem(q, ordemId));
+  const janela = janelaCheckin(ordem.dataAgendada, ordem.horaAgendada);
   return {
     raioM: raioPermitidoMetros(env),
+    // A tela usa estes campos para trocar o botão por um aviso fora do dia.
+    checkinAbreEm: janela ? janela.abre.toISOString() : null,
+    checkinFechaEm: janela ? janela.fecha.toISOString() : null,
+    checkinNoPrazo: !janela || (agora >= janela.abre && agora <= janela.fecha),
     clienteTemReferencia: ordem.latitude !== null && ordem.geoEndereco === chaveEndereco(ordem),
     podeRegistrar: usuario.perfil === "tecnico" && ordem.tecnicoId === usuario.id,
     ...registros,
@@ -143,7 +184,7 @@ function lerPosicao(posicao) {
 export async function registrarLocalizacao(
   q,
   { ordemId, tipo, usuario, posicao, justificativa },
-  { env = process.env, geocodificar } = {},
+  { env = process.env, geocodificar, agora = new Date() } = {},
 ) {
   if (!["checkin", "checkout"].includes(tipo)) {
     throw erroHttp("Tipo de registro inválido.", 400);
@@ -164,6 +205,16 @@ export async function registrarLocalizacao(
     if (existentes.checkin) throw erroHttp("O check-in deste atendimento já foi registrado.", 409);
     if (ordem.status === "concluida") {
       throw erroHttp("O atendimento já foi concluído. Não é possível fazer o check-in.", 409);
+    }
+    const janela = janelaCheckin(ordem.dataAgendada, ordem.horaAgendada);
+    if (janela && agora < janela.abre) {
+      throw erroHttp(
+        `O check-in só pode ser feito no dia do atendimento, a partir de ${dataHoraBrasilia(janela.abre)}.`,
+        409,
+      );
+    }
+    if (janela && agora > janela.fecha) {
+      throw erroHttp("O dia deste atendimento já passou. Não é possível fazer o check-in.", 409);
     }
   } else {
     if (!existentes.checkin) throw erroHttp("Faça o check-in antes do check-out.", 409);
@@ -191,6 +242,9 @@ export async function registrarLocalizacao(
       422,
       { codigo: "FORA_DO_RAIO", distanciaM: distancia, raioM: raio },
     );
+  }
+  if (dentro === false && !justificativaValida(motivo)) {
+    throw erroHttp("Escreva o motivo com pelo menos duas palavras (ex.: sem vaga em frente).", 400);
   }
   if (motivo.length > 255) {
     throw erroHttp("A justificativa pode ter no máximo 255 caracteres.", 400);

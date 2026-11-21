@@ -43,4 +43,5 @@
 @media (max-width: 820px) {
   .inst-hero, .inst-contact, .inst-mvv { grid-template-columns: 1fr; }
   .inst-topbar { position: static; }
+  
 }

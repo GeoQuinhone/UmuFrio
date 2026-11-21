@@ -93,3 +93,50 @@ html[data-theme="dark"] .tema-toggle-fixo {
   border-color: #34495a;
   color: #f2c14e;
 }
+
+/* Fase 11: resumo e ajuste do pagamento no tema escuro. */
+html[data-theme="dark"] .pagamento-resumo { background: hsl(200 30% 12%); }
+html[data-theme="dark"] .pagamento-resumo dt { color: #a9b8c1; }
+html[data-theme="dark"] .pagamento-resumo dd,
+html[data-theme="dark"] .pagamento-resumo-total dt,
+html[data-theme="dark"] .pagamento-ajuste legend { color: #e6f0f5; }
+html[data-theme="dark"] .pagamento-resumo-acrescimo dd { color: #f2c14e; }
+html[data-theme="dark"] .pagamento-resumo-desconto dd { color: #6fd3a0; }
+html[data-theme="dark"] .pagamento-ajuste-tipo label { color: #a9b8c1; }
+html[data-theme="dark"] .pagamento-ajuste-tipo label.ativo { background: #1c7293; color: #fff; }
+
+/* Fase 11: motivo do "não realizado" no tema escuro. */
+html[data-theme="dark"] .nao-realizado-motivo { border-left-color: #f07a6c; background: #3a1d1a; color: #f6c3bc; }
+html[data-theme="dark"] .nao-realizado-motivo strong { color: #ffd9d4; }
+
+/* Fase 11: motivo do pagamento pendente no tema escuro. */
+html[data-theme="dark"] .payment-summary-grid .pendencia-motivo { border-color: #5c4a1c; border-left-color: #f2c14e; background: #2e2716; }
+html[data-theme="dark"] .payment-summary-grid .pendencia-motivo dt { color: #f2c14e; }
+html[data-theme="dark"] .payment-summary-grid .pendencia-motivo dd { color: #f7e2b0; }
+
+/* Fase 11: relatórios no tema escuro (pago/pendente, olho e nomes clicáveis). */
+html[data-theme="dark"] .rel-motivo.rel-motivo-ok { color: #6fd3a0; }
+html[data-theme="dark"] .rel-motivo.rel-motivo-aviso { color: #f2c14e; }
+html[data-theme="dark"] .rel-ver { color: #9fd3ea; }
+html[data-theme="dark"] .rel-ver:hover { border-color: #2f5568; background: #1d3a4a; color: #d4eef9; }
+html[data-theme="dark"] .rel-nome-link { color: #9fd3ea; text-decoration-color: rgba(159, 211, 234, 0.4); }
+html[data-theme="dark"] .rel-nome-link:hover { color: #d4eef9; }
+
+/* Fase 11: selos da forma de pagamento no tema escuro. */
+html[data-theme="dark"] .rel-forma-dinheiro { background: #173a2a; color: #6fd3a0; }
+html[data-theme="dark"] .rel-forma-pix { background: #14323f; color: #7fd0ee; }
+html[data-theme="dark"] .rel-forma-cartao_debito { background: #2a2342; color: #c3b0f2; }
+html[data-theme="dark"] .rel-forma-cartao_credito { background: #3a2a17; color: #f4b979; }
+html[data-theme="dark"] .rel-forma-sem { background: #22313a; color: #a9b8c1; }
+
+/* Fase 11: cores de pagos/pendentes no tema escuro. */
+html[data-theme="dark"] .rel-segment button.rel-seg-falta .rel-seg-num { color: #ff8f82; }
+html[data-theme="dark"] .rel-segment button.rel-seg-falta.is-active { background: #3a1d1a; color: #ffb3aa; }
+html[data-theme="dark"] .rel-segment button.rel-seg-falta.is-active .rel-seg-num { color: #ffb3aa; }
+html[data-theme="dark"] .rel-segment button.rel-seg-pagos.is-active { background: #173a2a; color: #8fe0b7; }
+html[data-theme="dark"] .rel-dias-atencao { background: #3a2f12; color: #f2c14e; }
+html[data-theme="dark"] .rel-dias-atrasado { background: #3a1d1a; color: #ffb3aa; }
+
+/* Fase 11: atalho de pagamentos pendentes no tema escuro. */
+html[data-theme="dark"] .dashboard-quick-alerta .dashboard-quick-icon { background: #3a1d1a; color: #ff8f82; }
+html[data-theme="dark"] .dashboard-quick-alerta .dashboard-quick-copy small { color: #ff8f82; }

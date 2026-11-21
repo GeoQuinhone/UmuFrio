@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../AuthContext.jsx";
 import Icon from "../components/Icon.jsx";
@@ -60,6 +61,7 @@ export default function Welcome({
   usuarios,
 }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const profile = user?.perfil;
   const canAgenda = ["ceo", "atendente", "tecnico"].includes(profile);
   const canCreateAppointment = ["ceo", "atendente"].includes(profile);
@@ -197,6 +199,18 @@ export default function Welcome({
       : []),
   ];
 
+  // Fase 11: concluídos com pagamento a receber (atalho para cobrar).
+  const pendentesConcluidos = appointmentItems.filter(
+    (appointment) =>
+      appointment.status === "agendado" &&
+      appointment.ordemStatus === "concluida" &&
+      !pagamentoConfirmado(appointment),
+  );
+  const valorPendentes = pendentesConcluidos.reduce(
+    (total, appointment) => total + Number(valorDoAtendimento(appointment) || 0),
+    0,
+  );
+
   const quickLinks = [
     {
       key: "clientes",
@@ -221,6 +235,20 @@ export default function Welcome({
       icon: "package",
       detail: count(estoque, `${criticalStock} itens críticos`),
       roles: ["ceo", "estoquista"],
+    },
+    {
+      key: "pagamentos-pendentes",
+      title: "Pagamentos pendentes",
+      icon: "wallet",
+      detail: count(
+        agendamentos,
+        pendentesConcluidos.length
+          ? `${pendentesConcluidos.length} a receber · ${formatMoeda(valorPendentes)}`
+          : "Nenhum pagamento pendente",
+      ),
+      alerta: pendentesConcluidos.length > 0,
+      to: "/agendamentos?aba=concluidos&pagamento=pendente",
+      roles: ["ceo", "atendente"],
     },
     {
       key: "servicos",
@@ -362,9 +390,9 @@ export default function Welcome({
             {quickLinks.map((link) => (
               <button
                 type="button"
-                className="dashboard-quick-link"
+                className={`dashboard-quick-link${link.alerta ? " dashboard-quick-alerta" : ""}`}
                 key={link.key}
-                onClick={() => onNavigate(link.key)}
+                onClick={() => (link.to ? navigate(link.to) : onNavigate(link.key))}
               >
                 <span className="dashboard-quick-icon">
                   <Icon name={link.icon} size={17} />

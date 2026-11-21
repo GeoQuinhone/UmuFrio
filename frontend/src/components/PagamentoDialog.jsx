@@ -20,10 +20,44 @@ function paraCampoMoeda(valor) {
   return mascaraMoeda(String(Math.round(numero * 100)));
 }
 
-// Pagamento do atendimento (pontos 11 e 17): valor cobrado (pode ser
-// diferente do valor do serviço), forma de pagamento, confirmação e a
-// observação com o motivo quando o valor muda. Depois de confirmado, só o CEO
-// consegue alterar.
+// Fase 11: motivos prontos para acréscimo e desconto (o texto escolhido vai
+// para a observação do pagamento; "Outro" exige descrever).
+const MOTIVOS = {
+  acrescimo: [
+    "Deslocamento",
+    "Peça ou material avulso",
+    "Serviço adicional no local",
+    "Outro",
+  ],
+  desconto: [
+    "Desconto combinado com o cliente",
+    "Cliente recorrente",
+    "Serviço feito em parte",
+    "Outro",
+  ],
+};
+
+// Fase 11: "Pagamento pendente: motivo | resto" -> { pendencia, resto }.
+const PREFIXO_PENDENTE = "Pagamento pendente:";
+function separarPendencia(observacao) {
+  const texto = String(observacao || "").trim();
+  if (!texto.startsWith(PREFIXO_PENDENTE)) return { pendencia: "", resto: texto };
+  const [primeira, ...outras] = texto.split(" | ");
+  return { pendencia: primeira.slice(PREFIXO_PENDENTE.length).trim(), resto: outras.join(" | ") };
+}
+
+// Lê uma observação já gravada ("Motivo: detalhe") de volta para os campos.
+function lerMotivo(tipo, observacao) {
+  const texto = separarPendencia(observacao).resto;
+  const motivo = MOTIVOS[tipo].find((m) => m !== "Outro" && texto.startsWith(m));
+  if (!motivo) return { motivo: texto ? "Outro" : "", detalhe: texto };
+  return { motivo, detalhe: texto.slice(motivo.length).replace(/^[:\s.-]+/, "") };
+}
+
+// Pagamento do atendimento. O total a receber é calculado sozinho (serviço +
+// peças extras). Para cobrar diferente, o técnico abre "Acréscimo ou
+// desconto", informa o valor e escolhe o motivo. Depois de confirmado, só o
+// CEO consegue alterar.
 export default function PagamentoDialog({
   atendimento,
   perfil,
@@ -36,18 +70,41 @@ export default function PagamentoDialog({
   const [pixAprovado, setPixAprovado] = useState(false);
   const confirmadoAntes = Boolean(atendimento.pagamentoConfirmado) || pixAprovado;
   const somenteLeitura = confirmadoAntes && perfil !== "ceo";
-  // Fase 8: o valor esperado é o serviço + as peças extras usadas.
-  const valorExtras = Number(atendimento.extrasValor ?? 0);
-  const valorServico = Number(atendimento.servicoValor ?? 0) + valorExtras;
 
-  const [valor, setValor] = useState(
-    paraCampoMoeda(atendimento.valorCobrado ?? valorServico),
-  );
+  const valorServicoTabela = Number(atendimento.servicoValor ?? 0);
+  const valorExtras = Number(atendimento.extrasValor ?? 0);
+  const totalCentavos = Math.round((valorServicoTabela + valorExtras) * 100);
+
+  // Valor já gravado: vira acréscimo/desconto. Um valor antigo sem motivo e
+  // ainda não confirmado (gravado antes de lançar peças) é ignorado.
+  const { pendencia } = separarPendencia(atendimento.observacaoPagamento);
+  const [inicial] = useState(() => {
+    const gravado = atendimento.valorCobrado;
+    const temGravado = gravado !== null && gravado !== undefined && gravado !== "";
+    const usarGravado =
+      temGravado && (atendimento.pagamentoConfirmado || atendimento.observacaoPagamento);
+    const diferenca = usarGravado ? Math.round(Number(gravado) * 100) - totalCentavos : 0;
+    if (diferenca === 0) {
+      return { aberto: false, tipo: "acrescimo", valor: "", motivo: "", detalhe: "", nota: separarPendencia(atendimento.observacaoPagamento).resto };
+    }
+    const tipo = diferenca > 0 ? "acrescimo" : "desconto";
+    return {
+      aberto: true,
+      tipo,
+      valor: paraCampoMoeda(Math.abs(diferenca) / 100),
+      ...lerMotivo(tipo, atendimento.observacaoPagamento),
+      nota: "",
+    };
+  });
+
+  const [ajusteAberto, setAjusteAberto] = useState(inicial.aberto);
+  const [tipoAjuste, setTipoAjuste] = useState(inicial.tipo);
+  const [valorAjuste, setValorAjuste] = useState(inicial.valor);
+  const [motivo, setMotivo] = useState(inicial.motivo);
+  const [detalhe, setDetalhe] = useState(inicial.detalhe);
+  const [nota, setNota] = useState(inicial.nota);
   const [forma, setForma] = useState(atendimento.formaPagamento || "");
   const [confirmado, setConfirmado] = useState(confirmadoAntes);
-  const [observacao, setObservacao] = useState(
-    atendimento.observacaoPagamento || "",
-  );
   const [erros, setErros] = useState({});
   const [erroGeral, setErroGeral] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -62,22 +119,53 @@ export default function PagamentoDialog({
     };
   }, []);
 
-  const valorNumero = moedaParaNumero(valor);
-  const diferenca = Math.round(valorNumero * 100) - Math.round(valorServico * 100);
-  const valorDiferente = valor !== "" && diferenca !== 0;
+  const ajusteCentavos = ajusteAberto && valorAjuste !== ""
+    ? Math.round(moedaParaNumero(valorAjuste) * 100)
+    : 0;
+  const sinal = tipoAjuste === "desconto" ? -1 : 1;
+  const receberCentavos = totalCentavos + sinal * ajusteCentavos;
+  const valorNumero = receberCentavos / 100;
+  const temAjuste = ajusteAberto && ajusteCentavos > 0;
+
+  function textoDaCobranca() {
+    if (!temAjuste) return nota.trim();
+    const extra = detalhe.trim();
+    if (motivo === "Outro") return extra;
+    return extra ? `${motivo}: ${extra}` : motivo;
+  }
+
+  // Fase 11: pago, o "Pagamento pendente" sai da observação; ainda sem
+  // confirmar (ex.: gerando o PIX), ele continua guardado.
+  function observacaoFinal(confirmando) {
+    const texto = textoDaCobranca();
+    if (confirmando || !pendencia) return texto || null;
+    return [`${PREFIXO_PENDENTE} ${pendencia}`, texto].filter(Boolean).join(" | ").slice(0, 255);
+  }
+
+  function limparErro(...campos) {
+    setErros((atuais) => {
+      const novos = { ...atuais };
+      for (const campo of campos) delete novos[campo];
+      return novos;
+    });
+  }
 
   // Validação comum ao "Salvar pagamento" e ao "Gerar PIX".
   function validar(exigirConfirmacao = true) {
     const novosErros = {};
 
-    if (valor === "") {
-      novosErros.valor = "Informe o valor cobrado.";
-    }
-    if (valorDiferente && !observacao.trim()) {
-      novosErros.observacao =
-        diferenca > 0
-          ? "Informe o motivo da cobrança a mais."
-          : "Informe o motivo do valor menor que o do serviço.";
+    if (ajusteAberto) {
+      if (ajusteCentavos <= 0) {
+        novosErros.valorAjuste =
+          tipoAjuste === "desconto" ? "Informe o valor do desconto." : "Informe o valor do acréscimo.";
+      } else if (tipoAjuste === "desconto" && ajusteCentavos > totalCentavos) {
+        novosErros.valorAjuste = "O desconto não pode ser maior que o total.";
+      }
+      if (!motivo) {
+        novosErros.motivo = "Escolha o motivo.";
+      } else if (motivo === "Outro" && detalhe.trim().length < 10) {
+        novosErros.detalhe = "Descreva o motivo (mínimo de 10 caracteres).";
+      }
     }
     if (exigirConfirmacao && confirmado && !forma) {
       novosErros.forma = "Informe a forma de pagamento para confirmar.";
@@ -98,7 +186,7 @@ export default function PagamentoDialog({
       valorCobrado: valorNumero,
       formaPagamento: "pix",
       pagamentoConfirmado: false,
-      observacaoPagamento: observacao.trim() || null,
+      observacaoPagamento: observacaoFinal(false),
     });
   }
 
@@ -120,7 +208,7 @@ export default function PagamentoDialog({
         valorCobrado: valorNumero,
         formaPagamento: forma || null,
         pagamentoConfirmado: confirmado,
-        observacaoPagamento: observacao.trim() || null,
+        observacaoPagamento: observacaoFinal(confirmado),
       });
       onClose();
     } catch (saveError) {
@@ -128,6 +216,14 @@ export default function PagamentoDialog({
     } finally {
       setSalvando(false);
     }
+  }
+
+  function removerAjuste() {
+    setAjusteAberto(false);
+    setValorAjuste("");
+    setMotivo("");
+    setDetalhe("");
+    limparErro("valorAjuste", "motivo", "detalhe");
   }
 
   return (
@@ -168,16 +264,29 @@ export default function PagamentoDialog({
             </button>
           </div>
 
-          <p className="payment-reference">
-            {atendimento.servicoNome} · valor do serviço{" "}
-            <strong>{formatMoeda(atendimento.servicoValor)}</strong>
+          {/* Resumo: o total se monta sozinho com as peças lançadas. */}
+          <dl className="pagamento-resumo" aria-label="Resumo da cobrança">
+            <div>
+              <dt>{atendimento.servicoNome || "Serviço"}</dt>
+              <dd>{formatMoeda(valorServicoTabela)}</dd>
+            </div>
             {valorExtras > 0 && (
-              <>
-                {" "}+ peças extras <strong>{formatMoeda(valorExtras)}</strong>
-                {" "}= <strong>{formatMoeda(valorServico)}</strong>
-              </>
+              <div>
+                <dt>Peças extras</dt>
+                <dd>+ {formatMoeda(valorExtras)}</dd>
+              </div>
             )}
-          </p>
+            {temAjuste && (
+              <div className={tipoAjuste === "desconto" ? "pagamento-resumo-desconto" : "pagamento-resumo-acrescimo"}>
+                <dt>{tipoAjuste === "desconto" ? "Desconto" : "Acréscimo"}{motivo && motivo !== "Outro" ? ` · ${motivo}` : ""}</dt>
+                <dd>{tipoAjuste === "desconto" ? "− " : "+ "}{formatMoeda(ajusteCentavos / 100)}</dd>
+              </div>
+            )}
+            <div className="pagamento-resumo-total">
+              <dt>Total a receber</dt>
+              <dd>{formatMoeda(valorNumero)}</dd>
+            </div>
+          </dl>
 
           {somenteLeitura && (
             <p className="payment-notice" role="status">
@@ -189,87 +298,148 @@ export default function PagamentoDialog({
             </p>
           )}
 
+          {pendencia && !confirmadoAntes && (
+            <p className="payment-notice" role="status">
+              Pagamento ficou pendente na conclusão. Motivo: {pendencia}
+            </p>
+          )}
+
           {erroGeral && (
             <p className="catalog-form-error" role="alert">
               {erroGeral}
             </p>
           )}
 
-          <div className="form-grid">
-            <Field
-              label="Valor cobrado (R$)"
-              error={erros.valor}
-              hint={
-                valorDiferente
-                  ? diferenca > 0
-                    ? `${formatMoeda(diferenca / 100)} acima do valor esperado.`
-                    : `${formatMoeda(Math.abs(diferenca) / 100)} abaixo do valor esperado.`
-                  : undefined
-              }
+          {!ajusteAberto && !somenteLeitura && (
+            <button
+              type="button"
+              className="btn-ghost pagamento-ajuste-abrir"
+              onClick={() => setAjusteAberto(true)}
             >
-              <TextInput
-                value={valor}
-                onChange={(event) => {
-                  setValor(mascaraMoeda(event.target.value));
-                  setErros((atuais) => ({ ...atuais, valor: undefined, observacao: undefined }));
-                }}
-                inputMode="numeric"
-                placeholder="0,00"
+              + Acréscimo ou desconto
+            </button>
+          )}
+
+          {ajusteAberto && (
+            <fieldset className="pagamento-ajuste" disabled={somenteLeitura}>
+              <legend>Acréscimo ou desconto</legend>
+
+              <div className="pagamento-ajuste-tipo" role="radiogroup" aria-label="Tipo de ajuste">
+                {[
+                  ["acrescimo", "Acréscimo"],
+                  ["desconto", "Desconto"],
+                ].map(([valorTipo, rotulo]) => (
+                  <label key={valorTipo} className={tipoAjuste === valorTipo ? "ativo" : ""}>
+                    <input
+                      type="radio"
+                      name="tipo-ajuste"
+                      value={valorTipo}
+                      checked={tipoAjuste === valorTipo}
+                      onChange={() => {
+                        setTipoAjuste(valorTipo);
+                        setMotivo("");
+                        limparErro("valorAjuste", "motivo", "detalhe");
+                      }}
+                    />
+                    {rotulo}
+                  </label>
+                ))}
+              </div>
+
+              <div className="form-grid">
+                <Field label="Valor (R$)" error={erros.valorAjuste}>
+                  <TextInput
+                    value={valorAjuste}
+                    onChange={(event) => {
+                      setValorAjuste(mascaraMoeda(event.target.value));
+                      limparErro("valorAjuste");
+                    }}
+                    inputMode="numeric"
+                    placeholder="0,00"
+                  />
+                </Field>
+
+                <Field label="Motivo" error={erros.motivo}>
+                  <Select
+                    value={motivo}
+                    onChange={(event) => {
+                      setMotivo(event.target.value);
+                      limparErro("motivo", "detalhe");
+                    }}
+                  >
+                    <option value="">Selecione...</option>
+                    {MOTIVOS[tipoAjuste].map((opcao) => (
+                      <option key={opcao} value={opcao}>
+                        {opcao}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </div>
+
+              <Field
+                label={motivo === "Outro" ? "Descreva o motivo" : "Detalhes (opcional)"}
+                error={erros.detalhe}
+              >
+                <textarea
+                  className="input payment-observation"
+                  rows={2}
+                  maxLength={200}
+                  value={detalhe}
+                  onChange={(event) => {
+                    setDetalhe(event.target.value);
+                    limparErro("detalhe");
+                  }}
+                  placeholder="Ex.: troca do capacitor do ventilador, combinado com o cliente"
+                />
+              </Field>
+
+              {!somenteLeitura && (
+                <button type="button" className="btn-ghost pagamento-ajuste-remover" onClick={removerAjuste}>
+                  Remover acréscimo/desconto
+                </button>
+              )}
+            </fieldset>
+          )}
+
+          <Field label="Forma de pagamento" error={erros.forma}>
+            <Select
+              value={forma}
+              onChange={(event) => {
+                setForma(event.target.value);
+                limparErro("forma");
+              }}
+              disabled={somenteLeitura}
+            >
+              <option value="">Selecione...</option>
+              {FORMAS_PAGAMENTO.map((opcao) => (
+                <option key={opcao.value} value={opcao.value}>
+                  {opcao.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          {!temAjuste && (
+            <Field label="Observação (opcional)">
+              <textarea
+                className="input payment-observation"
+                rows={2}
+                maxLength={255}
+                value={nota}
+                onChange={(event) => setNota(event.target.value)}
+                placeholder="Alguma informação sobre a cobrança"
                 disabled={somenteLeitura}
               />
             </Field>
-
-            <Field label="Forma de pagamento" error={erros.forma}>
-              <Select
-                value={forma}
-                onChange={(event) => {
-                  setForma(event.target.value);
-                  setErros((atuais) => ({ ...atuais, forma: undefined }));
-                }}
-                disabled={somenteLeitura}
-              >
-                <option value="">Selecione...</option>
-                {FORMAS_PAGAMENTO.map((opcao) => (
-                  <option key={opcao.value} value={opcao.value}>
-                    {opcao.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          </div>
-
-          <Field
-            label={
-              valorDiferente
-                ? "Observação (motivo da diferença de valor)"
-                : "Observação (opcional)"
-            }
-            error={erros.observacao}
-          >
-            <textarea
-              className="input payment-observation"
-              rows={3}
-              maxLength={255}
-              value={observacao}
-              onChange={(event) => {
-                setObservacao(event.target.value);
-                setErros((atuais) => ({ ...atuais, observacao: undefined }));
-              }}
-              placeholder={
-                valorDiferente
-                  ? "Ex.: peça adicional, deslocamento, desconto combinado..."
-                  : "Alguma informação sobre a cobrança"
-              }
-              disabled={somenteLeitura}
-            />
-          </Field>
+          )}
 
           {forma === "pix" &&
             atendimento.ordemId &&
             (pixAprovado || !confirmadoAntes) && (
               <PixPanel
                 ordemId={atendimento.ordemId}
-                valorAtual={valor === "" ? null : valorNumero}
+                valorAtual={valorNumero}
                 preparar={prepararPix}
                 onAprovado={aoAprovarPix}
               />
@@ -283,8 +453,8 @@ export default function PagamentoDialog({
               disabled={somenteLeitura}
             />
             <span>
-              <strong>Pagamento recebido e confirmado</strong>
-              <small>Marque somente depois de receber o valor do cliente.</small>
+              <strong>Recebi {formatMoeda(valorNumero)} do cliente</strong>
+              <small>Marque somente depois de receber o valor.</small>
             </span>
           </label>
 
