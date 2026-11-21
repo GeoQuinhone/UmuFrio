@@ -26,6 +26,10 @@ export default function PrimeiroAcesso() {
       setError("A senha não pode ser formada só por espaços.");
       return;
     }
+    if (senha === senhaAtual) {
+      setError("A nova senha deve ser diferente da senha atual.");
+      return;
+    }
     if (senha !== confirmar) {
       setError("As senhas não coincidem.");
       return;

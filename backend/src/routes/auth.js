@@ -254,13 +254,19 @@ router.post("/trocar-senha", requireAuth, async (req, res, next) => {
       });
     }
 
-    // Fora do primeiro acesso, exige a senha atual correta antes de trocar.
-    if (
-      !req.usuario.primeiroAcesso &&
-      !verifyPassword(senhaAtual, usuario.senhaHash)
-    ) {
-      return res.status(401).json({
+    // Exige a senha atual correta antes de trocar, também no primeiro acesso
+    // (é a senha provisória que o CEO passou). Responde 400, e não 401, para a
+    // tela mostrar o aviso sem encerrar a sessão do usuário.
+    if (!verifyPassword(senhaAtual, usuario.senhaHash)) {
+      return res.status(400).json({
         error: "Informe a senha atual correta.",
+      });
+    }
+
+    // A nova senha precisa ser diferente da atual (senão a troca não tem efeito).
+    if (verifyPassword(novaSenha, usuario.senhaHash)) {
+      return res.status(400).json({
+        error: "A nova senha deve ser diferente da senha atual.",
       });
     }
 
