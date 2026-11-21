@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-
+import TemaToggle from "../components/TemaToggle.jsx";
 import ChatWidget from "../components/ChatWidget.jsx";
 import Icon from "../components/Icon.jsx";
 import { useWhatsappUrl } from "../utils/whatsapp.js";
@@ -46,6 +46,7 @@ export default function Institucional() {
           <a href="#missao">Missão, visão e valores</a>
           <a href="#servicos">Serviços</a>
           <a href="#contato">Fale conosco</a>
+          <TemaToggle/>
           <Link to="/login" className="inst-login">Área da equipe</Link>
         </nav>
       </header>

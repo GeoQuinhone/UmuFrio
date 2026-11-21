@@ -39,6 +39,9 @@ export const FORMAS_PAGAMENTO = [
 const EXIGIR_PAGAMENTO_PARA_CONCLUIR =
   process.env.EXIGIR_PAGAMENTO_PARA_CONCLUIR === "true";
 
+// Fase 11: início da observação quando o atendimento é concluído sem receber.
+const PREFIXO_PENDENTE = "Pagamento pendente:";
+
 function emCentavos(valor) {
   return Math.round(Number(valor) * 100);
 }
@@ -525,9 +528,43 @@ router.patch(
             );
           }
 
+          // Fase 11: concluir sem o pagamento confirmado exige o motivo
+          // (ex.: "cliente vai pagar na empresa"). Ele fica na observação do
+          // pagamento, para a empresa saber por que não foi recebido na hora.
+          let observacaoPendente = ordem.observacaoPagamento;
+          let valorPendente = null;
+
+          if (proximoStatus === "concluida" && !ordem.pagamentoConfirmado) {
+            const motivo = String(req.body?.motivoPagamentoPendente ?? "").trim();
+            if (motivo.length < 5) {
+              throw erroHttp(
+                "O pagamento ainda não foi registrado. Registre o pagamento ou informe por que ele ficou pendente.",
+                409,
+                { codigo: "PAGAMENTO_PENDENTE" },
+              );
+            }
+            const textoPendente = `${PREFIXO_PENDENTE} ${motivo}`;
+            observacaoPendente = (
+              ordem.observacaoPagamento
+                ? `${textoPendente} | ${ordem.observacaoPagamento}`
+                : textoPendente
+            ).slice(0, 255);
+
+            // Sem acréscimo/desconto justificado, o valor a receber é serviço +
+            // peças extras (o valor gravado no início não inclui as peças).
+            if (!ordem.observacaoPagamento) {
+              const [servicoDaOrdem] = await tx
+                .select({ valor: servicos.valor })
+                .from(servicos)
+                .where(eq(servicos.id, ordem.servicoId));
+              const extras = await valorExtrasDaOrdem(tx, id);
+              valorPendente = (Number(servicoDaOrdem?.valor ?? 0) + extras).toFixed(2);
+            }
+          }
+
           // O valor cobrado nasce igual ao valor do serviço no momento em que
           // o atendimento começa; depois pode ser ajustado em /pagamento.
-          let valorCobradoInicial = ordem.valorCobrado;
+          let valorCobradoInicial = valorPendente ?? ordem.valorCobrado;
 
           if (
             proximoStatus === "andamento" &&
@@ -627,6 +664,7 @@ router.patch(
                   ? new Date()
                   : ordem.concluidaEm,
               valorCobrado: valorCobradoInicial,
+              observacaoPagamento: observacaoPendente,
             })
             .where(
               and(
@@ -751,9 +789,15 @@ router.patch(
       }
 
       const confirmado = Boolean(req.body.pagamentoConfirmado);
-      const observacao =
-        String(req.body.observacaoPagamento || "").trim() ||
-        null;
+      let textoObservacao = String(req.body.observacaoPagamento || "").trim();
+
+      // Fase 11: com o pagamento confirmado, o "Pagamento pendente: ..." da
+      // conclusão perde o sentido e sai da observação (fica o resto, se houver).
+      if (confirmado && textoObservacao.startsWith(PREFIXO_PENDENTE)) {
+        textoObservacao = textoObservacao.split(" | ").slice(1).join(" | ").trim();
+      }
+
+      const observacao = textoObservacao || null;
 
       if (observacao && observacao.length > 255) {
         return res.status(400).json({

@@ -391,3 +391,71 @@
 .rel-status-button:not(:disabled):hover { color: #176b9d; }
 .rel-chips-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
 .rel-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* Fase 11: "Pago" em verde e "Pagamento pendente" em amarelo na lista. */
+.rel-motivo.rel-motivo-ok { color: #1b7a47; font-weight: 700; }
+.rel-motivo.rel-motivo-aviso { color: #a06a00; font-weight: 700; }
+
+/* Fase 11: olho "Ver detalhes" em cada linha da lista. */
+.rel-ver {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #176b9d;
+  cursor: pointer;
+}
+.rel-ver:hover { border-color: #d7e6e9; background: #eaf5f3; color: #12325b; }
+.rel-ver:focus-visible { outline: 2px solid #1c7293; outline-offset: 2px; }
+
+/* Fase 11: nome do serviço/técnico clicável (abre os atendimentos dele). */
+.rel-nome-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #176b9d;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: rgba(23, 107, 157, 0.35);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.rel-nome-link:hover { color: #12325b; text-decoration-color: currentColor; }
+.rel-nome-link:focus-visible { outline: 2px solid #1c7293; outline-offset: 2px; border-radius: 3px; }
+
+/* Fase 11: selo colorido da forma de pagamento (mesmas cores das barras). */
+.rel-forma {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.rel-forma-dinheiro { background: #e3f6ec; color: #1b7a47; }
+.rel-forma-pix { background: #e1f3fa; color: #136f91; }
+.rel-forma-cartao_debito { background: #efe9fb; color: #5e43a8; }
+.rel-forma-cartao_credito { background: #fdeedd; color: #a95f15; }
+.rel-forma-sem { background: #eef2f4; color: #5b6672; }
+
+/* Fase 11: ao rolar até a lista, deixa espaço para a barra fixa do topo. */
+.rel-drill { scroll-margin-top: 76px; }
+
+/* Fase 11: "Falta pagar" e "Já pagaram" com cores suaves (fundo claro). */
+.rel-segment button.rel-seg-falta .rel-seg-num { color: #c0392b; }
+.rel-segment button.rel-seg-falta.is-active { background: #fdecea; color: #a12a2a; }
+.rel-segment button.rel-seg-falta.is-active .rel-seg-num { color: #a12a2a; }
+.rel-segment button.rel-seg-pagos.is-active { background: #e3f6ec; color: #1b7a47; }
+
+/* Fase 11: valor a receber na cor normal, só um pouco mais forte. */
+.rel-table td.rel-valor-pendente { font-weight: 700; }
+
+/* Fase 11: dias em aberto em selo suave (8 a 30 = atenção; mais de 30 = atrasado). */
+.rel-dias { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.rel-dias-atencao { background: #fff3d6; color: #8a5a00; }
+.rel-dias-atrasado { background: #fdecec; color: #a12a2a; }

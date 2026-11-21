@@ -591,3 +591,21 @@
 .schedule-contact { display: flex; align-items: center; gap: 8px; margin-top: 2px; font-weight: 600; }
 .schedule-contact a { color: #176b9d; text-decoration: none; }
 .schedule-whats-link { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #e3f6ec; color: #1b7a47 !important; }
+
+/* Fase 11: atendimento que acabou de ser iniciado fica destacado por alguns segundos. */
+@keyframes schedule-destaque {
+  0%, 70% { background: #dcefff; }
+  100% { background: transparent; }
+}
+@keyframes schedule-destaque-barra {
+  0%, 70% { box-shadow: inset 4px 0 0 #176b9d; }
+  100% { box-shadow: inset 4px 0 0 transparent; }
+}
+.schedule-row-destaque > td { animation: schedule-destaque 6s ease-out forwards; }
+.schedule-row-destaque > td:first-child { animation: schedule-destaque 6s ease-out forwards, schedule-destaque-barra 6s ease-out forwards; }
+@keyframes schedule-destaque-escuro {
+  0%, 70% { background: #173a52; }
+  100% { background: transparent; }
+}
+html[data-theme="dark"] .schedule-row-destaque > td { animation-name: schedule-destaque-escuro; }
+html[data-theme="dark"] .schedule-row-destaque > td:first-child { animation-name: schedule-destaque-escuro, schedule-destaque-barra; }
