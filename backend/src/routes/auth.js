@@ -1,3 +1,4 @@
+// Rotas de autenticação (/api/auth): login, criação do primeiro CEO, dados do usuário logado e troca de senha.
 import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, pool } from "../db/client.js";
@@ -12,8 +13,10 @@ import {
   cpfValido,
 } from "../security.js";
 
+// Cria o roteador deste módulo.
 const router = Router();
 
+// Remove do usuário os campos sensíveis (hash da senha, tentativas e bloqueio) antes de enviar ao front.
 const safe = (user) =>
   Object.fromEntries(
     Object.entries(user).filter(
@@ -29,6 +32,7 @@ const safe = (user) =>
     ),
   );
 
+// POST /api/auth/login — confere e-mail e senha e devolve o token de acesso.
 router.post("/login", async (req, res, next) => {
   try {
     const email = String(req.body.email || "").trim().toLowerCase();
@@ -40,6 +44,7 @@ router.post("/login", async (req, res, next) => {
       });
     }
 
+    // Busca o usuário pelo e-mail; e-mail inexistente ou usuário inativo recebe a mesma mensagem genérica.
     const [usuario] = await db
       .select()
       .from(usuarios)
@@ -51,6 +56,7 @@ router.post("/login", async (req, res, next) => {
       });
     }
 
+    // Se o usuário está bloqueado por tentativas erradas, responde 423 até o fim do bloqueio.
     if (
       usuario.bloqueadoAte &&
       new Date(usuario.bloqueadoAte) > new Date()
@@ -60,6 +66,7 @@ router.post("/login", async (req, res, next) => {
       });
     }
 
+    // Senha errada: soma uma falha e, na 5ª, bloqueia o usuário por 15 minutos.
     const senhaValida = verifyPassword(senha, usuario.senhaHash);
 
     if (!senhaValida) {
@@ -81,6 +88,7 @@ router.post("/login", async (req, res, next) => {
       });
     }
 
+    // Senha certa: zera as falhas e o bloqueio.
     await db
       .update(usuarios)
       .set({
@@ -89,6 +97,7 @@ router.post("/login", async (req, res, next) => {
       })
       .where(eq(usuarios.id, usuario.id));
 
+    // Devolve o token de login e os dados do usuário.
     return res.json({
       token: signToken(usuario),
       usuario: safe(usuario),
@@ -98,6 +107,7 @@ router.post("/login", async (req, res, next) => {
   }
 });
 
+// POST /api/auth/bootstrap — cria o primeiro CEO do sistema; só funciona enquanto não existir nenhum usuário.
 router.post("/bootstrap", async (req, res, next) => {
   let client;
 
@@ -106,10 +116,12 @@ router.post("/bootstrap", async (req, res, next) => {
 
     await client.query("BEGIN");
 
+    // Trava a operação para duas pessoas não criarem o primeiro CEO ao mesmo tempo.
     await client.query(
       "SELECT pg_advisory_xact_lock(hashtext('umufrio:ceo-bootstrap'))",
     );
 
+    // Se já existe algum usuário, recusa (409).
     const count = await client.query(
       "SELECT count(*)::int AS total FROM usuarios",
     );
@@ -122,6 +134,7 @@ router.post("/bootstrap", async (req, res, next) => {
       });
     }
 
+    // Lê e limpa os dados enviados e valida nome, e-mail, CPF, telefone e senha.
     const nome = String(req.body.nome || "").trim();
     const email = String(req.body.email || "").trim().toLowerCase();
     const cpf = onlyDigits(req.body.cpf);
@@ -143,6 +156,7 @@ router.post("/bootstrap", async (req, res, next) => {
       });
     }
 
+    // Grava o CEO com senha criptografada e já devolve o token de login.
     const senhaHash = hashPassword(senha);
 
     const result = await client.query(
@@ -181,6 +195,7 @@ router.post("/bootstrap", async (req, res, next) => {
       token: signToken(usuario),
       usuario: safe(usuario),
     });
+  // Em caso de erro desfaz a transação; no final sempre libera a conexão com o banco.
   } catch (error) {
     if (client) {
       await client.query("ROLLBACK");
@@ -194,6 +209,7 @@ router.post("/bootstrap", async (req, res, next) => {
   }
 });
 
+// GET /api/auth/me — devolve os dados atualizados do usuário logado.
 router.get("/me", requireAuth, async (req, res, next) => {
   try {
     const [usuario] = await db
@@ -213,11 +229,13 @@ router.get("/me", requireAuth, async (req, res, next) => {
   }
 });
 
+// POST /api/auth/trocar-senha — troca a senha do usuário logado (obrigatória no primeiro acesso).
 router.post("/trocar-senha", requireAuth, async (req, res, next) => {
   try {
     const senhaAtual = String(req.body.senhaAtual || "");
     const novaSenha = String(req.body.novaSenha || "");
 
+    // A nova senha precisa ter pelo menos 6 caracteres.
     if (novaSenha.length < 6) {
       return res.status(400).json({
         error: "A nova senha deve ter no mínimo 6 caracteres.",
@@ -235,6 +253,7 @@ router.post("/trocar-senha", requireAuth, async (req, res, next) => {
       });
     }
 
+    // Fora do primeiro acesso, exige a senha atual correta antes de trocar.
     if (
       !req.usuario.primeiroAcesso &&
       !verifyPassword(senhaAtual, usuario.senhaHash)
@@ -244,6 +263,7 @@ router.post("/trocar-senha", requireAuth, async (req, res, next) => {
       });
     }
 
+    // Grava a nova senha criptografada e tira a marca de "primeiro acesso".
     await db
       .update(usuarios)
       .set({
@@ -260,79 +280,5 @@ router.post("/trocar-senha", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/recuperar-senha/validar", async (req, res, next) => {
-  try {
-    const email = String(req.body.email || "").trim().toLowerCase();
-
-    if (!email) {
-      return res.status(400).json({
-        error: "Informe o e-mail.",
-      });
-    }
-
-    const [usuario] = await db
-      .select()
-      .from(usuarios)
-      .where(eq(usuarios.email, email));
-
-    if (!usuario) {
-      return res.status(401).json({
-        error: "E-mail não encontrado.",
-      });
-    }
-
-    return res.json({
-      valido: true,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.post("/recuperar-senha/redefinir", async (req, res, next) => {
-  try {
-    const email = String(req.body.email || "").trim().toLowerCase();
-    const novaSenha = String(req.body.novaSenha || "");
-
-    if (!email) {
-      return res.status(400).json({
-        error: "Informe o e-mail.",
-      });
-    }
-
-    if (novaSenha.length < 6) {
-      return res.status(400).json({
-        error: "A nova senha deve ter no mínimo 6 caracteres.",
-      });
-    }
-
-    const [usuario] = await db
-      .select()
-      .from(usuarios)
-      .where(eq(usuarios.email, email));
-
-    if (!usuario) {
-      return res.status(401).json({
-        error: "E-mail não encontrado.",
-      });
-    }
-
-    await db
-      .update(usuarios)
-      .set({
-        senhaHash: hashPassword(novaSenha),
-        primeiroAcesso: 0,
-        falhasLogin: 0,
-        bloqueadoAte: null,
-      })
-      .where(eq(usuarios.id, usuario.id));
-
-    return res.json({
-      sucesso: true,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
+// Exporta o roteador para o app.js.
 export default router;

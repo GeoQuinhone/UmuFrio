@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import TemaToggle from "../components/TemaToggle.jsx";
 import ChatWidget from "../components/ChatWidget.jsx";
@@ -31,21 +31,65 @@ function abrirChat() {
   window.dispatchEvent(new Event("umufrio:abrir-chat"));
 }
 
+// Fase 11: rolagem animada (quem prefere menos movimento no aparelho recebe a rolagem direta).
+function comportamentoDeRolagem() {
+  const reduzir = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  return reduzir ? "auto" : "smooth";
+}
+
 export default function Institucional() {
   const whatsappUrl = useWhatsappUrl();
+  // Fase 11: menu hambúrguer (celular) aberto ou fechado.
+  const [menuAberto, setMenuAberto] = useState(false);
+
+  // Fecha o menu com a tecla Esc.
+  useEffect(() => {
+    if (!menuAberto) return undefined;
+    const fechar = (e) => { if (e.key === "Escape") setMenuAberto(false); };
+    window.addEventListener("keydown", fechar);
+    return () => window.removeEventListener("keydown", fechar);
+  }, [menuAberto]);
+
+  // Desce até a seção com animação (em vez de "pular" seco) e fecha o menu.
+  function irParaSecao(e, id) {
+    e.preventDefault();
+    setMenuAberto(false);
+    const alvo = document.getElementById(id);
+    if (!alvo) return;
+    alvo.scrollIntoView({ behavior: comportamentoDeRolagem(), block: "start" });
+    window.history.replaceState(null, "", `#${id}`);
+  }
+
+  // Clicar na marca UmuFrio volta ao topo da página, também com animação.
+  function voltarAoTopo(e) {
+    e.preventDefault();
+    setMenuAberto(false);
+    window.scrollTo({ top: 0, behavior: comportamentoDeRolagem() });
+    window.history.replaceState(null, "", window.location.pathname);
+  }
 
   return (
     <div className="inst-page">
       <header className="inst-topbar">
-        <Link to="/" className="inst-brand" aria-label="UmuFrio, início">
+        <Link to="/" className="inst-brand" aria-label="UmuFrio, voltar ao topo" onClick={voltarAoTopo}>
           <span className="inst-brand-mark"><Icon name="wind" size={20} /></span>
           <strong>UmuFrio</strong>
         </Link>
-        <nav className="inst-nav" aria-label="Seções">
-          <a href="#quem-somos">Quem somos</a>
-          <a href="#missao">Missão, visão e valores</a>
-          <a href="#servicos">Serviços</a>
-          <a href="#contato">Fale conosco</a>
+        <button
+          type="button"
+          className="inst-menu-toggle"
+          aria-label={menuAberto ? "Fechar menu" : "Abrir menu"}
+          aria-expanded={menuAberto}
+          aria-controls="inst-menu"
+          onClick={() => setMenuAberto((aberto) => !aberto)}
+        >
+          <Icon name={menuAberto ? "close" : "menu"} size={22} />
+        </button>
+        <nav id="inst-menu" className={`inst-nav${menuAberto ? " inst-nav-open" : ""}`} aria-label="Seções">
+          <a href="#quem-somos" onClick={(e) => irParaSecao(e, "quem-somos")}>Quem somos</a>
+          <a href="#missao" onClick={(e) => irParaSecao(e, "missao")}>Missão, visão e valores</a>
+          <a href="#servicos" onClick={(e) => irParaSecao(e, "servicos")}>Serviços</a>
+          <a href="#contato" onClick={(e) => irParaSecao(e, "contato")}>Fale conosco</a>
           <TemaToggle/>
           <Link to="/login" className="inst-login">Área da equipe</Link>
         </nav>

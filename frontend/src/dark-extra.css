@@ -4,7 +4,7 @@ html[data-theme="dark"] {
   --uf-bg: #0f1a21;
   --uf-surface: #16232c;
   --uf-line: #2b3d49;
-  --uf-muted: #94a7b2;
+  --uf-muted: #ffffff;
   --border: #2b3d49;
   --page-bg: #0f1a21;
   --surface: #16232c;
@@ -17,7 +17,7 @@ html[data-theme="dark"] {
 html[data-theme="dark"] body,
 html[data-theme="dark"] #root {
   background: #0f1a21;
-  color: #d4e0e7;
+  color: #ffffff;
 }
 
 html[data-theme="dark"] .app-topbar {
@@ -29,7 +29,7 @@ html[data-theme="dark"] input,
 html[data-theme="dark"] select,
 html[data-theme="dark"] textarea {
   background-color: #1b2b36;
-  color: #e3edf2;
+  color: #ffffff;
   border-color: #34495a;
 }
 
@@ -40,7 +40,7 @@ html[data-theme="dark"] textarea::placeholder {
 
 html[data-theme="dark"] option {
   background: #1b2b36;
-  color: #e3edf2;
+  color: #ffffff;
 }
 
 html[data-theme="dark"] table,
@@ -52,7 +52,7 @@ html[data-theme="dark"] td {
 html[data-theme="dark"] .app-notification-button:hover,
 html[data-theme="dark"] .app-logout:hover {
   background: #24394a;
-  color: #e6f0f5;
+  color: #ffffff;
 }
 
 html[data-theme="dark"] .app-notification-button,
@@ -96,13 +96,13 @@ html[data-theme="dark"] .tema-toggle-fixo {
 
 /* Fase 11: resumo e ajuste do pagamento no tema escuro. */
 html[data-theme="dark"] .pagamento-resumo { background: hsl(200 30% 12%); }
-html[data-theme="dark"] .pagamento-resumo dt { color: #a9b8c1; }
+html[data-theme="dark"] .pagamento-resumo dt { color: #ffffff; }
 html[data-theme="dark"] .pagamento-resumo dd,
 html[data-theme="dark"] .pagamento-resumo-total dt,
-html[data-theme="dark"] .pagamento-ajuste legend { color: #e6f0f5; }
+html[data-theme="dark"] .pagamento-ajuste legend { color: #ffffff; }
 html[data-theme="dark"] .pagamento-resumo-acrescimo dd { color: #f2c14e; }
 html[data-theme="dark"] .pagamento-resumo-desconto dd { color: #6fd3a0; }
-html[data-theme="dark"] .pagamento-ajuste-tipo label { color: #a9b8c1; }
+html[data-theme="dark"] .pagamento-ajuste-tipo label { color: #ffffff; }
 html[data-theme="dark"] .pagamento-ajuste-tipo label.ativo { background: #1c7293; color: #fff; }
 
 /* Fase 11: motivo do "não realizado" no tema escuro. */
@@ -127,7 +127,7 @@ html[data-theme="dark"] .rel-forma-dinheiro { background: #173a2a; color: #6fd3a
 html[data-theme="dark"] .rel-forma-pix { background: #14323f; color: #7fd0ee; }
 html[data-theme="dark"] .rel-forma-cartao_debito { background: #2a2342; color: #c3b0f2; }
 html[data-theme="dark"] .rel-forma-cartao_credito { background: #3a2a17; color: #f4b979; }
-html[data-theme="dark"] .rel-forma-sem { background: #22313a; color: #a9b8c1; }
+html[data-theme="dark"] .rel-forma-sem { background: #22313a; color: #ffffff; }
 
 /* Fase 11: cores de pagos/pendentes no tema escuro. */
 html[data-theme="dark"] .rel-segment button.rel-seg-falta .rel-seg-num { color: #ff8f82; }
@@ -140,3 +140,20 @@ html[data-theme="dark"] .rel-dias-atrasado { background: #3a1d1a; color: #ffb3aa
 /* Fase 11: atalho de pagamentos pendentes no tema escuro. */
 html[data-theme="dark"] .dashboard-quick-alerta .dashboard-quick-icon { background: #3a1d1a; color: #ff8f82; }
 html[data-theme="dark"] .dashboard-quick-alerta .dashboard-quick-copy small { color: #ff8f82; }
+
+/* Fase 11: menu hambúrguer da página institucional no modo escuro */
+html[data-theme="dark"] .inst-menu-toggle {
+  border-color: #34495a;
+  background: #16232c;
+  color: #ffffff;
+}
+@media (max-width: 820px) {
+  html[data-theme="dark"] .inst-nav {
+    background: #16232c;
+    border-bottom-color: #2b3d49;
+  }
+  html[data-theme="dark"] .inst-nav a {
+    border-bottom-color: #2b3d49;
+    color: #ffffff;
+  }
+}

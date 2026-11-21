@@ -242,6 +242,23 @@ export default function Servicos({ crud, estoque, onBack }) {
       return;
     }
 
+    // Fase 11: a quantidade de cada peça (somando repetidas) não pode passar do saldo do estoque.
+    const totais = new Map();
+    form.pecas.forEach((piece) => {
+      if (piece.produtoId && Number(piece.quantidadeNecessaria) > 0) {
+        totais.set(String(piece.produtoId), (totais.get(String(piece.produtoId)) || 0) + Number(piece.quantidadeNecessaria));
+      }
+    });
+    for (const [idProduto, quantidade] of totais) {
+      const produto = produtos.find((item) => String(item.id) === idProduto);
+      if (produto && quantidade > Number(produto.saldo)) {
+        setFormError(
+          `Estoque insuficiente de "${produto.nome}". Necessário: ${quantidade}. Disponível: ${produto.saldo}.`,
+        );
+        return;
+      }
+    }
+
     setSaving(true);
 
     try {

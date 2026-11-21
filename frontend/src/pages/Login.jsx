@@ -1,20 +1,15 @@
 import React, { useState } from "react";
 
 import { useAuth } from "../AuthContext.jsx";
-import { apiRequest } from "../api.js";
 import ChatWidget from "../components/ChatWidget.jsx";
 import Icon from "../components/Icon.jsx";
 import TemaToggle from "../components/TemaToggle.jsx";
 import { useWhatsappUrl } from "../utils/whatsapp.js";
 import "./auth.css";
 
-const emptyRecoveryForm = {
-  email: "",
-  novaSenha: "",
-  confirmarSenha: "",
-};
-
+// Tela de login: entra com e-mail e senha, com o assistente de atendimento.
 export default function Login() {
+  // Estado do login (e-mail, senha, mensagens e carregamento).
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
@@ -22,11 +17,8 @@ export default function Login() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isRecovering, setIsRecovering] = useState(false);
-  const [recoveryStep, setRecoveryStep] = useState("identificar");
-  const [recoveryForm, setRecoveryForm] = useState(emptyRecoveryForm);
-  const [recoveryError, setRecoveryError] = useState("");
 
+  // Faz o login; se falhar, mostra a mensagem do servidor.
   async function handleLogin(event) {
     event.preventDefault();
     setLoading(true);
@@ -41,178 +33,14 @@ export default function Login() {
     }
   }
 
-  function abrirRecuperacao() {
-    setIsRecovering(true);
-    setRecoveryStep("identificar");
-    setRecoveryForm(emptyRecoveryForm);
-    setRecoveryError("");
-    setError("");
-    setInfo("");
-  }
-
-  function fecharRecuperacao() {
-    setIsRecovering(false);
-    setRecoveryStep("identificar");
-    setRecoveryForm(emptyRecoveryForm);
-    setRecoveryError("");
-  }
-
-  async function handleValidarRecuperacao(event) {
-    event.preventDefault();
-    setRecoveryError("");
-    setLoading(true);
-    try {
-      await apiRequest("/auth/recuperar-senha/validar", {
-        method: "POST",
-        body: JSON.stringify({
-          email: recoveryForm.email,
-        }),
-      });
-      setRecoveryStep("redefinir");
-    } catch (requestError) {
-      setRecoveryError(
-        requestError.message || "Não foi possível validar o e-mail informado.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleRedefinirSenha(event) {
-    event.preventDefault();
-    setRecoveryError("");
-
-    if (recoveryForm.novaSenha.length < 6) {
-      setRecoveryError("A nova senha deve ter no mínimo 6 caracteres.");
-      return;
-    }
-
-    if (recoveryForm.novaSenha !== recoveryForm.confirmarSenha) {
-      setRecoveryError("As senhas informadas não coincidem.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await apiRequest("/auth/recuperar-senha/redefinir", {
-        method: "POST",
-        body: JSON.stringify({
-          email: recoveryForm.email,
-          novaSenha: recoveryForm.novaSenha,
-        }),
-      });
-      fecharRecuperacao();
-      setEmail(recoveryForm.email);
-      setInfo("Senha redefinida com sucesso. Faça login com a nova senha.");
-    } catch (requestError) {
-      setRecoveryError(
-        requestError.message || "Não foi possível redefinir a senha.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  if (isRecovering) {
-    return (
-      <div className="auth-setup">
-        <main className="auth-setup-card">
-          <img
-            className="auth-logo"
-            src="/brand/umufrio-logo.png"
-            alt="UmuFrio"
-          />
-          <h1>Recuperar senha</h1>
-          <p>
-            {recoveryStep === "identificar"
-              ? "Informe o e-mail cadastrado para redefinir sua senha."
-              : "Defina uma nova senha de acesso."}
-          </p>
-
-          {recoveryError && (
-            <div className="auth-feedback auth-error" role="alert">
-              {recoveryError}
-            </div>
-          )}
-
-          {recoveryStep === "identificar" ? (
-            <form className="auth-setup-form" onSubmit={handleValidarRecuperacao}>
-              <div className="auth-setup-grid">
-                <label className="auth-field auth-field-full">
-                  <span>E-mail corporativo</span>
-                  <input
-                    type="email"
-                    autoComplete="username"
-                    value={recoveryForm.email}
-                    onChange={(event) =>
-                      setRecoveryForm({ ...recoveryForm, email: event.target.value })
-                    }
-                    placeholder="voce@empresa.com.br"
-                    required
-                    autoFocus
-                  />
-                </label>
-              </div>
-              <button className="auth-primary" type="submit" disabled={loading}>
-                {loading ? "Validando..." : "Continuar"}
-              </button>
-            </form>
-          ) : (
-            <form className="auth-setup-form" onSubmit={handleRedefinirSenha}>
-              <div className="auth-setup-grid">
-                <label className="auth-field auth-field-full">
-                  <span>Nova senha</span>
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    value={recoveryForm.novaSenha}
-                    onChange={(event) =>
-                      setRecoveryForm({ ...recoveryForm, novaSenha: event.target.value })
-                    }
-                    minLength={6}
-                    placeholder="Mínimo de 6 caracteres"
-                    required
-                    autoFocus
-                  />
-                </label>
-                <label className="auth-field auth-field-full">
-                  <span>Confirmar nova senha</span>
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    value={recoveryForm.confirmarSenha}
-                    onChange={(event) =>
-                      setRecoveryForm({ ...recoveryForm, confirmarSenha: event.target.value })
-                    }
-                    minLength={6}
-                    placeholder="Repita a nova senha"
-                    required
-                  />
-                </label>
-              </div>
-              <button className="auth-primary" type="submit" disabled={loading}>
-                {loading ? "Salvando..." : "Redefinir senha"}
-              </button>
-            </form>
-          )}
-
-          <button
-            type="button"
-            className="auth-secondary-link"
-            onClick={fecharRecuperacao}
-          >
-            Voltar ao login
-          </button>
-        </main>
-      </div>
-    );
-  }
-
+  // Link do WhatsApp para o rodapé do login.
   const whatsappUrl = useWhatsappUrl();
 
+  // Monta a tela de login.
   return (
     <div className="auth-login">
       <TemaToggle className="tema-toggle-fixo" />
+      {/* Lado esquerdo: marca, destaques e frase de apresentação. */}
       <section className="auth-login-art" aria-label="UmuFrio Gestão Técnica">
         <div className="auth-hero-brand">
           <span className="auth-hero-mark"><Icon name="wind" size={23} /></span>
@@ -231,6 +59,7 @@ export default function Login() {
         </div>
       </section>
 
+      {/* Lado direito: formulário de entrada. */}
       <section className="auth-login-panel">
         <div className="auth-form-wrap">
           <img
@@ -242,6 +71,7 @@ export default function Login() {
           <p>Acesse o painel</p>
           {error && <div className="auth-feedback auth-error" role="alert">{error}</div>}
           {info && <div className="auth-feedback" role="status">{info}</div>}
+          {/* Formulário de e-mail e senha. */}
           <form className="auth-form" onSubmit={handleLogin}>
             <label className="auth-field">
               <span>E-mail corporativo</span>
@@ -282,6 +112,7 @@ export default function Login() {
           <p className="auth-about-link">
             <a href="/">Conheça a UmuFrio: missão, visão e valores</a>
           </p>
+          {/* Atalho para o WhatsApp. */}
           <div className="auth-whatsapp">
             <span>Precisa de ajuda ou quer contratar um serviço?</span>
             <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
@@ -291,6 +122,7 @@ export default function Login() {
           </div>
         </div>
       </section>
+      {/* Assistente de atendimento (chat). */}
       <ChatWidget />
     </div>
   );
