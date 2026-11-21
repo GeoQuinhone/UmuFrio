@@ -22,6 +22,10 @@ export default function PrimeiroAcesso() {
       setError("A nova senha deve ter no mínimo 6 caracteres.");
       return;
     }
+    if (!senha.trim()) {
+      setError("A senha não pode ser formada só por espaços.");
+      return;
+    }
     if (senha !== confirmar) {
       setError("As senhas não coincidem.");
       return;
