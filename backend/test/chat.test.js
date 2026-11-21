@@ -155,3 +155,24 @@ test("modoChat: IA só com chave; sem chave é indisponível; demonstração só
   assert.equal(modoChat({ CHAT_MODO: "demonstracao" }), "demonstracao");
   assert.equal(modoChat({ ANTHROPIC_API_KEY: "sk", CHAT_MODO: "demonstracao" }), "demonstracao");
 });
+
+// Fase 11: resposta longa da IA no histórico não pode travar as próximas mensagens.
+test("resposta longa do assistente no histórico é aceita (e cortada), a do usuário continua limitada", () => {
+  const longa = "a".repeat(900);
+  const ok = validarMensagens({
+    mensagens: [
+      { papel: "usuario", texto: "preços?" },
+      { papel: "assistente", texto: longa },
+      { papel: "usuario", texto: "que dia é hoje" },
+    ],
+  });
+  assert.equal(ok[1].texto.length, 900);
+  const enorme = validarMensagens({
+    mensagens: [
+      { papel: "usuario", texto: "oi" },
+      { papel: "assistente", texto: "b".repeat(3000) },
+      { papel: "usuario", texto: "e agora?" },
+    ],
+  });
+  assert.equal(enorme[1].texto.length, 1500);
+});
