@@ -744,3 +744,15 @@
 
 .catalog-header-action--novo { background: #cf6a22; border-color: #cf6a22; color: #fff; }
 .catalog-header-action--novo:hover:not(:disabled) { background: #b85a18; border-color: #b85a18; }
+
+/* Fase 11: aviso de estoque no cadastro de serviço (não impede salvar). */
+.service-aviso-estoque {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #f0d58c;
+  border-left: 4px solid #d99a00;
+  border-radius: 8px;
+  background: #fff7e0;
+  color: #6b4500;
+  font-size: 0.88rem;
+}

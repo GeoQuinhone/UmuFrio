@@ -149,6 +149,27 @@ export default function Servicos({ crud, estoque, onBack }) {
     pecas: [],
   });
   const [formError, setFormError] = useState("");
+  // Fase 11: aviso (não trava) quando o estoque de hoje não cobre as peças do serviço.
+  const avisoEstoque = (() => {
+    const totais = new Map();
+    form.pecas.forEach((piece) => {
+      if (piece.produtoId && Number(piece.quantidadeNecessaria) > 0) {
+        const chave = String(piece.produtoId);
+        totais.set(chave, (totais.get(chave) || 0) + Number(piece.quantidadeNecessaria));
+      }
+    });
+    const faltando = [...totais]
+      .map(([idProduto, quantidade]) => {
+        const produto = produtos.find((item) => String(item.id) === idProduto);
+        return produto && quantidade > Number(produto.saldo)
+          ? `${produto.nome} (precisa ${quantidade}, há ${produto.saldo})`
+          : null;
+      })
+      .filter(Boolean);
+    return faltando.length
+      ? `Atenção: hoje o estoque não cobre ${faltando.join(", ")}. O serviço pode ser salvo; a falta será avisada na agenda.`
+      : "";
+  })();
   const [banner, setBanner] = useState("");
   const [sucesso, setSucesso] = useSucesso();
   const [saving, setSaving] = useState(false);
@@ -240,23 +261,6 @@ export default function Servicos({ crud, estoque, onBack }) {
         "A quantidade necessária de cada peça deve ser um inteiro maior que zero.",
       );
       return;
-    }
-
-    // Fase 11: a quantidade de cada peça (somando repetidas) não pode passar do saldo do estoque.
-    const totais = new Map();
-    form.pecas.forEach((piece) => {
-      if (piece.produtoId && Number(piece.quantidadeNecessaria) > 0) {
-        totais.set(String(piece.produtoId), (totais.get(String(piece.produtoId)) || 0) + Number(piece.quantidadeNecessaria));
-      }
-    });
-    for (const [idProduto, quantidade] of totais) {
-      const produto = produtos.find((item) => String(item.id) === idProduto);
-      if (produto && quantidade > Number(produto.saldo)) {
-        setFormError(
-          `Estoque insuficiente de "${produto.nome}". Necessário: ${quantidade}. Disponível: ${produto.saldo}.`,
-        );
-        return;
-      }
     }
 
     setSaving(true);
@@ -442,6 +446,11 @@ export default function Servicos({ crud, estoque, onBack }) {
               <p className="catalog-form-error" role="alert">
                 {formError}
               </p>
+            )}
+
+            {/* Fase 11: falta de saldo hoje só avisa; o serviço é salvo normalmente. */}
+            {avisoEstoque && (
+              <p className="service-aviso-estoque" role="status">{avisoEstoque}</p>
             )}
 
             <div className="catalog-form-grid service-main-fields">

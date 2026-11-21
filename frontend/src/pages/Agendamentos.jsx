@@ -439,7 +439,34 @@ export default function Agendamentos({
     }
 
         try {
-      const resultado = await ordensServico.action(atendimento.ordemId, "/avancar", corpo);
+      let resultado;
+      try {
+        resultado = await ordensServico.action(atendimento.ordemId, "/avancar", corpo);
+      } catch (erroAvancar) {
+        // Fase 11: falta peça no estoque. O atendimento não para: quem inicia
+        // (técnico, atendente ou CEO) pode seguir informando como resolveu.
+        if (!iniciando || erroAvancar.dados?.codigo !== "FALTA_PECA") throw erroAvancar;
+        const lista = (erroAvancar.dados.faltando || [])
+          .map((peca) => `${peca.nome} (precisa ${peca.necessario}, há ${peca.saldo})`)
+          .join(", ");
+        const seguir = await confirm(
+          `Falta peça no estoque: ${lista}. O sistema baixa só o que existe e avisa o CEO. Iniciar mesmo assim?`,
+          { title: "Falta peça no estoque", confirmLabel: "Iniciar mesmo assim", cancelLabel: "Voltar", danger: false },
+        );
+        if (!seguir) return;
+        const motivo = await pedirMotivo(
+          "Como a peça foi resolvida? (ex.: comprei na loja do bairro, a peça estava no estoque e o saldo estava errado, o técnico tinha no carro)",
+          {
+            title: "Iniciar com falta de peça",
+            confirmLabel: "Iniciar",
+            placeholder: "Ex.: comprei a tubulação na loja X",
+            danger: false,
+            minimo: 5,
+          },
+        );
+        if (!motivo) return;
+        resultado = await ordensServico.action(atendimento.ordemId, "/avancar", { motivoFaltaPeca: motivo });
+      }
       await recarregarTudo();
       // Fase 11: o atendimento iniciado sobe para o topo e fica destacado.
       // Ao concluir, vai para a aba Concluídos, onde ele aparece em 1º.
@@ -985,6 +1012,19 @@ export default function Agendamentos({
                         </td>
                         <td>
                           <Badge tone={estado.tone}>{estado.label}</Badge>
+                          {/* Fase 11: aviso antecipado de peça em falta no estoque. */}
+                          {atendimento.ordemStatus === "aberta" && atendimento.pecasFaltando?.length > 0 && (
+                            <small className="schedule-secondary-cell">
+                              <span
+                                className="schedule-falta-peca"
+                                title={atendimento.pecasFaltando
+                                  .map((peca) => `${peca.nome}: precisa ${peca.necessario}, há ${peca.saldo}`)
+                                  .join(" · ")}
+                              >
+                                Falta peça
+                              </span>
+                            </small>
+                          )}
                           {mostraPagamento && (
                             <small className="schedule-secondary-cell">
                               <Badge tone={pagamentoConfirmado(atendimento) ? "green" : "amber"}>
