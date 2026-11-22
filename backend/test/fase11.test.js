@@ -8,9 +8,9 @@ import {
 
 // Fase 11: check-in só no dia do atendimento e justificativa de verdade.
 
-test("janela do check-in: 2 horas antes do horário até o fim do dia (Brasília)", () => {
-  const janela = janelaCheckin("2026-11-30", "07:30");
-  assert.equal(janela.abre.toISOString(), "2026-11-30T08:30:00.000Z"); // 05:30 em Brasília
+test("janela do check-in: o dia todo do atendimento, das 07:00 às 23:59 (Brasília)", () => {
+  const janela = janelaCheckin("2026-11-30", "15:00");
+  assert.equal(janela.abre.toISOString(), "2026-11-30T10:00:00.000Z"); // 07:00 em Brasília
   assert.equal(janela.fecha.toISOString(), "2026-12-01T02:59:59.999Z"); // 23:59 em Brasília
   assert.equal(janelaCheckin(null, "07:30"), null);
   assert.equal(janelaCheckin("2026-11-30", null), null);
@@ -60,7 +60,7 @@ const opcoes = (agora) => ({
 test("check-in antes do dia é recusado com a hora em que libera", async () => {
   await assert.rejects(
     registrarLocalizacao(bancoFalso(ORDEM), ENTRADA, opcoes("2026-11-20T23:44:00Z")),
-    (erro) => erro.status === 409 && /a partir de 30\/11 às 05:30/.test(erro.message),
+    (erro) => erro.status === 409 && /a partir de 30\/11 às 07:00/.test(erro.message),
   );
 });
 

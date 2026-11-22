@@ -179,9 +179,15 @@ export default function Agendamentos({
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  // Ajuste final: ?data=hoje (cartão "Atendimentos hoje" do Início) abre a
+  // agenda já filtrada pelo dia de hoje.
+  const filtroHoje =
+    new URLSearchParams(location.search).get("data") === "hoje"
+      ? new Date().toLocaleDateString("en-CA")
+      : "";
+  const [showFilters, setShowFilters] = useState(Boolean(filtroHoje));
+  const [dateFrom, setDateFrom] = useState(filtroHoje);
+  const [dateTo, setDateTo] = useState(filtroHoje);
   // Fase 8: ?aba=nao_realizados abre direto a aba (usado pelos relatórios).
   const abaInicial = new URLSearchParams(location.search).get("aba");
   const [aba, setAba] = useState(
@@ -330,6 +336,22 @@ export default function Agendamentos({
       novosErros.hora = "Agende somente entre 07:00 e 19:00.";
     }
 
+    // Ajuste final: hoje, só a partir do horário atual (ao criar ou ao mudar a data/hora).
+    if (!novosErros.hora && form.data && form.hora) {
+      const agora = new Date();
+      const mudou =
+        !emEditar ||
+        String(alvo?.data || "").slice(0, 10) !== form.data ||
+        String(alvo?.hora || "").slice(0, 5) !== String(form.hora).slice(0, 5);
+      if (
+        mudou &&
+        form.data === agora.toLocaleDateString("en-CA") &&
+        minutosDoDia(form.hora) < agora.getHours() * 60 + agora.getMinutes()
+      ) {
+        novosErros.hora = "Este horário já passou. Escolha um horário a partir de agora.";
+      }
+    }
+
     if (!novosErros.tecnicoId && !novosErros.data && !novosErros.hora) {
       const minutosReferencia = minutosDoDia(form.hora);
 
@@ -339,7 +361,10 @@ export default function Agendamentos({
           outro.tecnicoId === Number(form.tecnicoId) &&
           String(outro.data).slice(0, 10) === form.data &&
           outro.status === "agendado" &&
-          Math.abs(minutosDoDia(outro.hora) - minutosReferencia) < 60,
+          // Ajuste final: concluído libera o horário (só o horário exato segue ocupado).
+          (outro.ordemStatus === "concluida"
+            ? minutosDoDia(outro.hora) === minutosReferencia
+            : Math.abs(minutosDoDia(outro.hora) - minutosReferencia) < 60),
       );
 
       if (conflito) {

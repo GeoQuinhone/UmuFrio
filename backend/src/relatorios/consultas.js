@@ -554,6 +554,13 @@ export async function listarAtendimentos(q, periodo, { situacao = "todos", tecni
             END AS situacao,
             ${VALOR}::float8 AS valor,
             COALESCE(o.pagamento_confirmado, 0)::int AS pago,
+            -- Ajuste final: situação do check-in do técnico neste atendimento.
+            (SELECT CASE WHEN r.dentro_raio IS TRUE THEN 'dentro'
+                         WHEN r.dentro_raio IS FALSE THEN 'fora'
+                         ELSE 'sem_referencia' END
+               FROM registros_localizacao r
+              WHERE r.ordem_id = o.id AND r.tipo = 'checkin'
+              LIMIT 1) AS checkin,
             count(*) OVER ()::int AS "totalLinhas"
        FROM agendamentos a
        JOIN clientes c ON c.id = a.cliente_id
@@ -582,6 +589,7 @@ export async function listarAtendimentos(q, periodo, { situacao = "todos", tecni
       situacao: l.situacao,
       valor: l.valor === null || l.valor === undefined ? null : arredondar(l.valor),
       pago: Boolean(l.pago),
+      checkin: l.checkin ?? null,
     })),
   };
 }

@@ -24,16 +24,18 @@ export function raioPermitidoMetros(env = process.env) {
   return Math.min(Math.max(Math.round(valor), 20), 5000);
 }
 
-// Fase 11: o check-in só vale no dia do atendimento, a partir de 2 horas antes
-// do horário marcado até o fim daquele dia (horário de Brasília).
-const ANTECEDENCIA_CHECKIN_MIN = 120;
+// Fase 11 (ajustado): o check-in só vale no dia do atendimento, das 07:00
+// (início do expediente) até as 23:59, horário de Brasília. Assim o técnico pode
+// adiantar o serviço no mesmo dia; o GPS e o horário gravado continuam provando
+// onde e quando ele estava.
+const ABERTURA_CHECKIN = "07:00";
 
 export function janelaCheckin(data, hora) {
   if (!data || !hora) return null;
-  const horario = new Date(`${data}T${String(hora).slice(0, 5)}:00-03:00`);
-  if (Number.isNaN(horario.getTime())) return null;
+  const abre = new Date(`${data}T${ABERTURA_CHECKIN}:00-03:00`);
+  if (Number.isNaN(abre.getTime())) return null;
   return {
-    abre: new Date(horario.getTime() - ANTECEDENCIA_CHECKIN_MIN * 60 * 1000),
+    abre,
     fecha: new Date(`${data}T23:59:59.999-03:00`),
   };
 }

@@ -167,8 +167,11 @@ export default function CheckinPanel({ ordemId, ordemStatus }) {
   const podeCheckout = info.podeRegistrar && info.checkin && !info.checkout && ordemStatus !== "aberta";
   const aguardaInicio = info.podeRegistrar && info.checkin && !info.checkout && ordemStatus === "aberta";
 
-  // Quem não é o técnico só vê, e só se já houver registro.
-  if (!info.podeRegistrar && !info.checkin && !info.checkout) return null;
+  // Quem não é o técnico só vê. Antes de iniciar, sem registro, não há o que
+  // mostrar; depois de iniciado, o painel aparece sempre (com "Sem check-in"
+  // quando o técnico não registrou), para o CEO saber se ele fez ou não.
+  const semCheckin = !info.checkin && ordemStatus !== "aberta";
+  if (!info.podeRegistrar && !info.checkin && !info.checkout && !semCheckin) return null;
 
   return (
     <section className="checkin-panel" aria-label="Check-in e check-out">
@@ -181,6 +184,12 @@ export default function CheckinPanel({ ordemId, ordemStatus }) {
         <Linha rotulo="Check-in" registro={info.checkin} />
         <Linha rotulo="Check-out" registro={info.checkout} />
       </dl>
+
+      {semCheckin && (
+        <p className="checkin-sem" role="status">
+          <strong>Sem check-in.</strong> O atendimento foi iniciado sem o técnico registrar a localização.
+        </p>
+      )}
 
       {erro && (
         <p className="catalog-form-error" role="alert">{erro}</p>
@@ -243,7 +252,7 @@ export default function CheckinPanel({ ordemId, ordemStatus }) {
       {!fora && foraDoPrazo && (
         <p className="checkin-hint">
           {checkinAindaNaoAbriu
-            ? `Check-in liberado a partir de ${formatDateTime(info.checkinAbreEm)} (2 horas antes do horário marcado).`
+            ? `Check-in liberado a partir de ${formatDateTime(info.checkinAbreEm)} (início do expediente no dia do atendimento).`
             : "O dia deste atendimento já passou. Não é possível fazer o check-in."}
         </p>
       )}

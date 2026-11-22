@@ -14,6 +14,7 @@ import {
    movimentacoesEstoque,
   clientes,
   usuarios,
+  registrosLocalizacao,
 } from "../db/schema.js";
 import {
   roles,
@@ -519,6 +520,18 @@ router.patch(
             throw error;
           }
 
+          // Ajuste final: o técnico só inicia depois do check-in (o GPS prova que ele
+          // estava no endereço do cliente). Atendente e CEO podem iniciar sem, de outro
+          // lugar (ex.: técnico sem internet no local).
+          if (proximoStatus === "andamento" && req.usuario.perfil === "tecnico") {
+            const [checkin] = await tx
+              .select({ id: registrosLocalizacao.id })
+              .from(registrosLocalizacao)
+              .where(and(eq(registrosLocalizacao.ordemId, id), eq(registrosLocalizacao.tipo, "checkin")));
+            if (!checkin) {
+              throw erroHttp("Faça o check-in antes de iniciar o atendimento.", 409, { codigo: "CHECKIN_PENDENTE" });
+            }
+          }
           if (
             proximoStatus === "concluida" &&
             EXIGIR_PAGAMENTO_PARA_CONCLUIR &&
