@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { useLocation, useMatch, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../AuthContext.jsx";
+import { apiRequest } from "../api.js";
+import { lerPosicao } from "../components/CheckinPanel.jsx";
 import { Badge, EmptyState, ErrorBanner, SuccessBanner, Field, Select, TextInput } from "../components/FormControls.jsx";
 import Icon from "../components/Icon.jsx";
 import Layout from "../components/Layout.jsx";
@@ -119,6 +121,59 @@ export default function Agendamentos({
   const isCeo = user?.perfil === "ceo";
   const { confirm, confirmElement } = useConfirm();
   const { pedirMotivo, motivoElement } = useMotivoDialog();
+
+  // Ajuste final: o técnico faz o check-in direto pelo botão Iniciar, sem
+  // precisar abrir "Ver detalhes". Devolve true quando o check-in foi gravado.
+  async function fazerCheckinAgora(atendimento) {
+    const ok = await confirm(
+      `Para iniciar o atendimento de ${atendimento.clienteNome}, registre o check-in. O sistema vai usar a localização do seu celular.`,
+      { title: "Check-in necessário", confirmLabel: "Fazer check-in e iniciar", cancelLabel: "Voltar", danger: false },
+    );
+    if (!ok) return false;
+
+    const avisar = (titulo, mensagem) =>
+      confirm(mensagem, { title: titulo, confirmLabel: "Entendi", cancelLabel: "Fechar", danger: false });
+
+    let posicao;
+    try {
+      posicao = await lerPosicao();
+    } catch (falha) {
+      await avisar("Localização indisponível", falha.message);
+      return false;
+    }
+
+    let justificativa;
+    for (;;) {
+      try {
+        await apiRequest(`/ordens-servico/${atendimento.ordemId}/checkin`, {
+          method: "POST",
+          body: JSON.stringify({ ...posicao, justificativa }),
+        });
+        return true;
+      } catch (falha) {
+        // Longe do endereço (ou justificativa curta demais): pede o motivo aqui mesmo.
+        if (falha.dados?.codigo === "FORA_DO_RAIO" || (justificativa && falha.status === 400)) {
+          const motivo = await pedirMotivo(
+            falha.dados?.codigo === "FORA_DO_RAIO"
+              ? `${falha.message} (ex.: sem vaga em frente, endereço no fundo do terreno)`
+              : falha.message,
+            {
+              title: "Fora do raio",
+              confirmLabel: "Registrar e iniciar",
+              placeholder: "Ex.: sem vaga em frente",
+              danger: false,
+              minimo: 5,
+            },
+          );
+          if (!motivo) return false;
+          justificativa = motivo;
+          continue;
+        }
+        await avisar("Não foi possível fazer o check-in", falha.message);
+        return false;
+      }
+    }
+  }
   const {
     items = [],
     loading,
@@ -157,6 +212,10 @@ export default function Agendamentos({
   const [showQuickClient, setShowQuickClient] = useState(false);
   const [errors, setErrors] = useState({});
   const [banner, setBanner] = useState("");
+  // Ajuste final: no celular, a mensagem de erro fica no topo; rola até ela.
+  useEffect(() => {
+    if (banner) document.querySelector(".error-banner")?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+  }, [banner]);
   const [sucesso, setSucesso] = useSucesso();
   // Fase 11: linha do atendimento que acabou de ser iniciado (destaque).
   const [destacadoId, setDestacadoId] = useState(null);
@@ -467,7 +526,20 @@ export default function Agendamentos({
       let resultado;
       try {
         resultado = await ordensServico.action(atendimento.ordemId, "/avancar", corpo);
-      } catch (erroAvancar) {
+      } catch (primeiroErro) {
+        let erroAvancar = primeiroErro;
+        // Ajuste final: técnico sem check-in faz o check-in aqui mesmo e o
+        // atendimento já inicia em seguida.
+        if (iniciando && erroAvancar.dados?.codigo === "CHECKIN_PENDENTE") {
+          if (!(await fazerCheckinAgora(atendimento))) return;
+          try {
+            resultado = await ordensServico.action(atendimento.ordemId, "/avancar", corpo);
+            erroAvancar = null;
+          } catch (depoisDoCheckin) {
+            erroAvancar = depoisDoCheckin;
+          }
+        }
+        if (erroAvancar) {
         // Fase 11: falta peça no estoque. O atendimento não para: quem inicia
         // (técnico, atendente ou CEO) pode seguir informando como resolveu.
         if (!iniciando || erroAvancar.dados?.codigo !== "FALTA_PECA") throw erroAvancar;
@@ -491,6 +563,7 @@ export default function Agendamentos({
         );
         if (!motivo) return;
         resultado = await ordensServico.action(atendimento.ordemId, "/avancar", { motivoFaltaPeca: motivo });
+        }
       }
       await recarregarTudo();
       // Fase 11: o atendimento iniciado sobe para o topo e fica destacado.

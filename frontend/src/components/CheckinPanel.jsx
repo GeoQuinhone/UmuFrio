@@ -9,7 +9,8 @@ import "./checkin-panel.css";
 // aparelho do técnico; quem calcula a distância até o endereço do cliente e
 // decide se está "dentro do raio" é o servidor.
 
-function lerPosicao() {
+// Exportada: o botão Iniciar da agenda também faz o check-in.
+export function lerPosicao() {
   return new Promise((resolve, reject) => {
     if (!("geolocation" in navigator)) {
       reject(new Error("Este navegador não oferece localização."));
