@@ -174,6 +174,58 @@ export default function Agendamentos({
       }
     }
   }
+
+  // Ajuste final: check-out automático quando o técnico conclui. Nunca impede
+  // a conclusão: é só o registro de que ele ficou até o fim no endereço.
+  // Devolve "feito", "pulado" (técnico preferiu não justificar), "sem_local"
+  // (GPS indisponível) ou "nao_aplica" (não é técnico, sem check-in, já feito).
+  async function fazerCheckoutAgora(atendimento) {
+    if (!isTecnico || !atendimento.ordemId) return "nao_aplica";
+    let posicao;
+    try {
+      posicao = await lerPosicao();
+    } catch {
+      return "sem_local";
+    }
+    let justificativa;
+    for (;;) {
+      try {
+        await apiRequest(`/ordens-servico/${atendimento.ordemId}/checkout`, {
+          method: "POST",
+          body: JSON.stringify({ ...posicao, justificativa }),
+        });
+        return "feito";
+      } catch (falha) {
+        if (falha.dados?.codigo === "FORA_DO_RAIO" || (justificativa && falha.status === 400)) {
+          const motivo = await pedirMotivo(
+            falha.dados?.codigo === "FORA_DO_RAIO"
+              ? `Check-out: ${falha.message} (ex.: já estava saindo do local)`
+              : falha.message,
+            {
+              title: "Check-out fora do raio",
+              confirmLabel: "Registrar e concluir",
+              cancelLabel: "Concluir sem check-out",
+              placeholder: "Ex.: já estava saindo do local",
+              danger: false,
+              minimo: 5,
+            },
+          );
+          if (!motivo) return "pulado";
+          justificativa = motivo;
+          continue;
+        }
+        // Sem check-in (iniciado pela atendente/CEO) ou check-out já feito: segue.
+        return "nao_aplica";
+      }
+    }
+  }
+
+  // Complemento da mensagem de sucesso quando o check-out não foi registrado.
+  function avisoCheckout(situacao) {
+    if (situacao === "sem_local") return " (sem check-out: localização indisponível)";
+    if (situacao === "pulado") return " (sem check-out)";
+    return "";
+  }
   const {
     items = [],
     loading,
@@ -523,6 +575,8 @@ export default function Agendamentos({
     }
 
         try {
+      // Ajuste final: ao concluir, o técnico já registra o check-out.
+      const checkout = iniciando ? "nao_aplica" : await fazerCheckoutAgora(atendimento);
       let resultado;
       try {
         resultado = await ordensServico.action(atendimento.ordemId, "/avancar", corpo);
@@ -574,7 +628,7 @@ export default function Agendamentos({
       setSucesso(
         iniciando
           ? "Atendimento iniciado com sucesso."
-          : "Atendimento concluído com sucesso.",
+          : `Atendimento concluído com sucesso.${avisoCheckout(checkout)}`,
       );
       setAvisoWhatsApp(resultado?.aviso || null);
     } catch (actionError) {
@@ -654,12 +708,14 @@ export default function Agendamentos({
   // cliente no WhatsApp e notifica o CEO); como já está pago, não pede motivo.
   async function concluirDepoisDoPagamento(atendimento) {
     try {
+      // Ajuste final: ao concluir, o técnico já registra o check-out.
+      const checkout = await fazerCheckoutAgora(atendimento);
       const resultado = await ordensServico.action(atendimento.ordemId, "/avancar");
       await recarregarTudo();
       trocarAba("concluidos");
       setDestacadoId(atendimento.id);
       setBanner("");
-      setSucesso("Pagamento registrado e atendimento concluído.");
+      setSucesso(`Pagamento registrado e atendimento concluído.${avisoCheckout(checkout)}`);
       setAvisoWhatsApp(resultado?.aviso || null);
     } catch (concluirError) {
       await crud.reload();
