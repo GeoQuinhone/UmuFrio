@@ -38,16 +38,29 @@ function count(resource, value) {
   return resource?.loading || resource?.error ? "—" : value;
 }
 
-function StatCard({ label, value, detail, tone = "default" }) {
-  return (
-    <article className={`dashboard-stat dashboard-stat-${tone}`}>
+function StatCard({ label, value, detail, tone = "default", onClick }) {
+  const conteudo = (
+    <>
       <small>{label}</small>
       <strong>{value}</strong>
       <span className={tone === "warning" ? "dashboard-stat-warning" : ""}>
         {detail}
       </span>
-    </article>
+    </>
   );
+  // Ajuste final: cartão com atalho (ex.: "Atendimentos hoje" abre a agenda do dia).
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className={`dashboard-stat dashboard-stat-${tone} dashboard-stat-link`}
+        onClick={onClick}
+      >
+        {conteudo}
+      </button>
+    );
+  }
+  return <article className={`dashboard-stat dashboard-stat-${tone}`}>{conteudo}</article>;
 }
 
 export default function Welcome({
@@ -141,6 +154,7 @@ export default function Welcome({
           {
             label: "Atendimentos hoje",
             value: count(agendamentos, appointmentsToday.length),
+            onClick: () => navigate("/agendamentos?data=hoje"),
             detail: agendamentos.error
               ? "Não foi possível carregar"
               : "Agendados para hoje",

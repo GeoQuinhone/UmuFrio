@@ -459,3 +459,11 @@
 .rel-dias { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .rel-dias-atencao { background: #fff3d6; color: #8a5a00; }
 .rel-dias-atrasado { background: #fdecec; color: #a12a2a; }
+
+/* Ajuste final: selo do check-in na lista de atendimentos. */
+.rel-checkin { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.rel-checkin-ok { background: #e3f6ec; color: #1b7a47; }
+.rel-checkin-aviso { background: #fff3d6; color: #8a5a00; }
+.rel-checkin-ruim { background: #fdecec; color: #a12a2a; }
+.rel-checkin-neutro { background: #eef1f4; color: #4a5560; }
+.rel-checkin-nada { padding: 0; color: #8a97a0; font-weight: 400; }

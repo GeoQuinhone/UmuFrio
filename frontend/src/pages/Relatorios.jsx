@@ -416,6 +416,19 @@ function useDetalhesAtendimento({ permitirPagamento = false, onPago } = {}) {
   return { verDetalhes, janela, aviso };
 }
 
+// Ajuste final: selo do check-in do técnico na lista de atendimentos.
+const SELO_CHECKIN = {
+  dentro: ["ok", "Dentro do raio"],
+  fora: ["aviso", "Fora do raio"],
+  sem_referencia: ["neutro", "Sem referência"],
+};
+function SeloCheckin({ linha }) {
+  const iniciado = ["andamento", "concluido"].includes(linha.situacao);
+  if (!linha.checkin && !iniciado) return <span className="rel-checkin rel-checkin-nada">—</span>;
+  const [tom, texto] = SELO_CHECKIN[linha.checkin] || ["ruim", "Sem check-in"];
+  return <span className={`rel-checkin rel-checkin-${tom}`}>{texto}</span>;
+}
+
 // Fase 11: olho "Ver detalhes" usado nas listas do relatório.
 function BotaoVer({ cliente, onClick }) {
   return (
@@ -484,6 +497,7 @@ function ListaAtendimentos({ periodo, filtro, titulo, onFechar }) {
                   <th>Serviço</th>
                   <th>Técnico</th>
                   <th>Situação</th>
+                  <th>Check-in</th>
                   <th className="num">Valor</th>
                   <th><span className="rel-sr">Ver detalhes</span></th>
                 </tr>
@@ -505,6 +519,7 @@ function ListaAtendimentos({ periodo, filtro, titulo, onFechar }) {
                         </small>
                       )}
                     </td>
+                    <td><SeloCheckin linha={l} /></td>
                     <td className="num">{l.valor === null ? "—" : formatMoeda(l.valor)}</td>
                     <td>
                       <BotaoVer cliente={l.cliente} onClick={() => verDetalhes({ id: l.id })} />
