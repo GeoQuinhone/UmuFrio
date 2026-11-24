@@ -18,8 +18,12 @@ Projeto de TCC do curso de Tecnologia em Sistemas para Internet (UniALFA).
 - Perfis: `ceo`, `atendente`, `estoquista` e `tecnico`.
 - Bloqueio temporário do usuário após 5 tentativas de login inválidas.
 - Troca de senha (inclusive a obrigatória do primeiro acesso): exige a **senha
-  atual** correta, a nova precisa ter no mínimo 6 caracteres, não pode ser só
-  espaços e deve ser **diferente** da atual.
+  atual** correta e a nova deve ser **diferente** da atual.
+- **Senha forte** (ao criar o CEO, cadastrar/redefinir usuário ou trocar a senha):
+  mínimo de 8 caracteres, pelo menos 1 caractere especial (ex.: `! @ # $ %`), não
+  pode ser só espaços, nem uma senha comum (`123456`, `senha`, `qwerty`,
+  `aaaaaaaa`…), nem conter o nome do e-mail ou o primeiro nome do usuário. A regra
+  vale no servidor e é repetida na tela; logins já existentes continuam valendo.
 - Gerenciamento de usuários (somente `ceo`).
 - Não há cadastro público de contas na tela de login. O primeiro `ceo` é criado
   uma única vez pelo endpoint `POST /api/auth/bootstrap` (veja
@@ -374,17 +378,6 @@ UmuFrio/
     └── package.json
 ```
 
-## Testes
-
-```bash
-cd backend
-npm test                          # roda todos os arquivos de test/
-node --test test/fase11.test.js   # ou um arquivo só
-```
-
-Os testes cobrem as regras puras (documentos, validações de cadastro, estoque,
-despesas, relatórios e permissões das rotas) e não precisam de banco.
-
 ## API
 
 | Recurso | Caminho |
@@ -405,4 +398,7 @@ despesas, relatórios e permissões das rotas) e não precisam de banco.
 | Check-in/check-out | `GET /api/ordens-servico/:id/localizacao`, `POST /:id/checkin`, `POST /:id/checkout` (técnico do atendimento) |
 | Chat (público) | `GET /api/chat/config` e `POST /api/chat` |
 | Relatórios (CEO) | `GET /api/relatorios?de=&ate=` e `GET /api/relatorios/csv/:tabela?de=&ate=` |
-
+Se faltarem, são criados os usuários `ceo@`, `atendente@`, `estoque@` e `tecnico1@` a
+`tecnico4@umufrio.com.br` (senha `Teste@123`). Usuários, serviços e produtos que já
+existirem são mantidos. O comando mostra o banco de destino antes de apagar e se
+recusa a rodar com `NODE_ENV=production`.
