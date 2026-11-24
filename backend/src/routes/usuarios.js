@@ -2,7 +2,7 @@ import { Router } from "express";
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { usuarios } from "../db/schema.js";
-import { nomePessoaValido } from "../validacoes.js";
+import { emailValido, mensagemSenha, nomePessoaValido } from "../validacoes.js";
 import {
   hashPassword,
   onlyDigits,
@@ -108,16 +108,22 @@ router.post(
         });
       }
 
+      if (!emailValido(email)) {
+        return res.status(400).json({
+          error: "E-mail inválido.",
+        });
+      }
+
       if (!cpfValido(cpf)) {
         return res.status(400).json({
           error: "CPF inválido.",
         });
       }
 
-      if (senha.length < 6) {
-        return res.status(400).json({
-          error: "A senha deve possuir no mínimo 6 caracteres.",
-        });
+      // Senha forte: 8+ caracteres, 1 especial, não comum e sem o nome do e-mail.
+      const erroSenha = mensagemSenha(senha, { email, nome });
+      if (erroSenha) {
+        return res.status(400).json({ error: erroSenha });
       }
 
       const emailNormalizado = email.trim().toLowerCase();
@@ -207,10 +213,14 @@ router.put(
         });
       }
 
-      if (senha && senha.length < 6) {
-        return res.status(400).json({
-          error: "A senha deve possuir no mínimo 6 caracteres.",
+      if (senha) {
+        const erroSenha = mensagemSenha(senha, {
+          email: usuarioAtual[0].email,
+          nome,
         });
+        if (erroSenha) {
+          return res.status(400).json({ error: erroSenha });
+        }
       }
 
       const dados = {

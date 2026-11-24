@@ -2,6 +2,7 @@ import React, { useState } from "react";
 
 import { useAuth } from "../AuthContext.jsx";
 import { apiRequest } from "../api.js";
+import { mensagemSenha } from "../utils/validacoes.js";
 import "./auth.css";
 
 export default function PrimeiroAcesso() {
@@ -18,8 +19,14 @@ export default function PrimeiroAcesso() {
       setError("Informe a senha atual.");
       return;
     }
-    if (senha.length < 6) {
-      setError("A nova senha deve ter no mínimo 6 caracteres.");
+    // Regra de senha forte (mesma do servidor): 8+ caracteres, 1 especial, não comum.
+    const erroSenha = mensagemSenha(senha, { email: user?.email, nome: user?.nome });
+    if (erroSenha) {
+      setError(erroSenha);
+      return;
+    }
+    if (senha === senhaAtual) {
+      setError("A nova senha deve ser diferente da senha atual.");
       return;
     }
     if (senha !== confirmar) {
@@ -76,7 +83,7 @@ export default function PrimeiroAcesso() {
                 autoComplete="new-password"
                 value={senha}
                 onChange={(event) => setSenha(event.target.value)}
-                minLength={6}
+                minLength={8}
                 required
               />
             </label>
@@ -87,7 +94,7 @@ export default function PrimeiroAcesso() {
                 autoComplete="new-password"
                 value={confirmar}
                 onChange={(event) => setConfirmar(event.target.value)}
-                minLength={6}
+                minLength={8}
                 required
               />
             </label>

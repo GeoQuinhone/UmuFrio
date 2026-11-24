@@ -3,7 +3,7 @@ import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, pool } from "../db/client.js";
 import { usuarios } from "../db/schema.js";
-import { nomePessoaValido } from "../validacoes.js";
+import { mensagemSenha, nomePessoaValido, senhaValida } from "../validacoes.js";
 import {
   hashPassword,
   onlyDigits,
@@ -146,13 +146,13 @@ router.post("/bootstrap", async (req, res, next) => {
       !email ||
       !cpfValido(cpf) ||
       !telefone ||
-      senha.length < 6
+      !senhaValida(senha, { email, nome })
     ) {
       await client.query("ROLLBACK");
 
       return res.status(400).json({
         error:
-          "Informe nome (só letras), e-mail, CPF válido, telefone e senha com no mínimo 6 caracteres.",
+          "Informe nome (só letras), e-mail, CPF válido, telefone e senha forte (mínimo de 8 caracteres e 1 caractere especial, sem o nome do e-mail).",
       });
     }
 
@@ -235,11 +235,10 @@ router.post("/trocar-senha", requireAuth, async (req, res, next) => {
     const senhaAtual = String(req.body.senhaAtual || "");
     const novaSenha = String(req.body.novaSenha || "");
 
-    // A nova senha precisa ter pelo menos 6 caracteres.
-    if (novaSenha.length < 6) {
-      return res.status(400).json({
-        error: "A nova senha deve ter no mínimo 6 caracteres.",
-      });
+    // A nova senha segue a regra de senha forte (mesma do cadastro de usuários).
+    const erroSenha = mensagemSenha(novaSenha);
+    if (erroSenha) {
+      return res.status(400).json({ error: erroSenha });
     }
 
     const [usuario] = await db
@@ -253,13 +252,25 @@ router.post("/trocar-senha", requireAuth, async (req, res, next) => {
       });
     }
 
-    // Fora do primeiro acesso, exige a senha atual correta antes de trocar.
-    if (
-      !req.usuario.primeiroAcesso &&
-      !verifyPassword(senhaAtual, usuario.senhaHash)
-    ) {
-      return res.status(401).json({
+    // A senha também não pode conter o nome do e-mail nem o primeiro nome do usuário.
+    const erroContexto = mensagemSenha(novaSenha, { email: usuario.email, nome: usuario.nome });
+    if (erroContexto) {
+      return res.status(400).json({ error: erroContexto });
+    }
+
+    // Exige a senha atual correta antes de trocar, também no primeiro acesso
+    // (é a senha provisória que o CEO passou). Responde 400, e não 401, para a
+    // tela mostrar o aviso sem encerrar a sessão do usuário.
+    if (!verifyPassword(senhaAtual, usuario.senhaHash)) {
+      return res.status(400).json({
         error: "Informe a senha atual correta.",
+      });
+    }
+
+    // A nova senha precisa ser diferente da atual (senão a troca não tem efeito).
+    if (verifyPassword(novaSenha, usuario.senhaHash)) {
+      return res.status(400).json({
+        error: "A nova senha deve ser diferente da senha atual.",
       });
     }
 

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   UFS, ufValida, nomePessoaValido, razaoSocialValida, nomeClienteValido, numeroImovelValido,
+  senhaValida, mensagemSenha, emailValido,
 } from "../src/validacoes.js";
 import { normalizarVinculos } from "../src/despesasRegras.js";
 import { LIMITE_QUANTIDADE, quantidadeDentroDoLimite } from "../src/estoqueRegras.js";
@@ -30,11 +31,12 @@ test("número do imóvel: só dígitos", () => {
   for (const n of ["12A", "S/N", "abc", "", "1234567", "-1", "1.5"]) assert.ok(!numeroImovelValido(n), n);
 });
 
-test("limite de estoque realista (200)", () => {
-  assert.equal(LIMITE_QUANTIDADE, 200);
+test("limite de estoque (99.999.999 unidades)", () => {
+  assert.equal(LIMITE_QUANTIDADE, 99999999);
   assert.ok(quantidadeDentroDoLimite(0));
-  assert.ok(quantidadeDentroDoLimite(200));
-  assert.ok(!quantidadeDentroDoLimite(201));
+  assert.ok(quantidadeDentroDoLimite(1));
+  assert.ok(quantidadeDentroDoLimite(99999999));
+  assert.ok(!quantidadeDentroDoLimite(100000000));
   assert.ok(!quantidadeDentroDoLimite(-1));
   assert.ok(!quantidadeDentroDoLimite(1.5));
 });
@@ -48,4 +50,19 @@ test("despesa: vínculo só com a categoria certa", () => {
   assert.deepEqual(normalizarVinculos("combustivel", { veiculoId: "" }), { veiculoId: null, funcionarioId: null });
   assert.ok(normalizarVinculos("combustivel", { veiculoId: "abc" }).erro);
   assert.ok(normalizarVinculos("salarios", { funcionarioId: -2 }).erro);
+});
+
+test("senha forte: 8+ caracteres, 1 especial, não comum e sem o nome do e-mail", () => {
+  for (const v of ["Abc@1234", "Senha#Forte9", "tempo!2025"]) assert.ok(senhaValida(v), v);
+  for (const v of ["", "a", "abc12", "      ", null, undefined, "123456", "12345678", "abc12345", "Abc@12", "aaaaaaaa"]) {
+    assert.ok(!senhaValida(v), String(v));
+  }
+  assert.ok(!senhaValida("joao@2024!", { email: "joao@umufrio.com.br" }));
+  assert.ok(!senhaValida("Carla#2025", { nome: "Carla Nunes" }));
+  assert.match(mensagemSenha("abcdefgh"), /especial/);
+});
+
+test("e-mail: formato conferido no servidor (CT33 e CT37)", () => {
+  for (const v of ["ana@teste.com", "ANA@Teste.com", "a.b@empresa.com.br"]) assert.ok(emailValido(v), v);
+  for (const v of ["anateste.com", "ana@", "@teste.com", "ana@teste", "", "ana @teste.com"]) assert.ok(!emailValido(v), v);
 });
