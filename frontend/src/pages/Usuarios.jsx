@@ -14,7 +14,7 @@ import "./clients-users.css";
 import { useSucesso } from "../hooks/useSucesso.js";
 import { mascaraCpf, mascaraTelefone, cpfValido } from "../utils/mascaras.js";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
-import { nomePessoaValido, filtrarNomePessoa } from "../utils/validacoes.js";
+import { nomePessoaValido, filtrarNomePessoa, mensagemSenha } from "../utils/validacoes.js";
 
 const FORM_VAZIO = {
   nome: "",
@@ -311,9 +311,8 @@ export default function Usuarios({ crud, onBack }) {
     }
 
     if (!editingId || form.senha) {
-      if (form.senha.length < 6 || !form.senha.trim()) {
-        novosErros.senha = "A senha deve possuir no mínimo 6 caracteres e não pode ser só espaços.";
-      }
+      const erroSenha = mensagemSenha(form.senha, { email: form.email, nome: form.nome });
+      if (erroSenha) novosErros.senha = erroSenha;
     }
 
     setErrors(novosErros);
@@ -550,7 +549,7 @@ export default function Usuarios({ crud, onBack }) {
                   onChange={(event) =>
                     setForm({ ...form, senha: event.target.value })
                   }
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 8 caracteres e 1 especial"
                 />
               </Field>
             </div>

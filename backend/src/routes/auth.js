@@ -3,7 +3,7 @@ import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, pool } from "../db/client.js";
 import { usuarios } from "../db/schema.js";
-import { nomePessoaValido, senhaValida } from "../validacoes.js";
+import { mensagemSenha, nomePessoaValido, senhaValida } from "../validacoes.js";
 import {
   hashPassword,
   onlyDigits,
@@ -146,13 +146,13 @@ router.post("/bootstrap", async (req, res, next) => {
       !email ||
       !cpfValido(cpf) ||
       !telefone ||
-      !senhaValida(senha)
+      !senhaValida(senha, { email, nome })
     ) {
       await client.query("ROLLBACK");
 
       return res.status(400).json({
         error:
-          "Informe nome (só letras), e-mail, CPF válido, telefone e senha com no mínimo 6 caracteres.",
+          "Informe nome (só letras), e-mail, CPF válido, telefone e senha forte (mínimo de 8 caracteres e 1 caractere especial, sem o nome do e-mail).",
       });
     }
 
@@ -235,12 +235,10 @@ router.post("/trocar-senha", requireAuth, async (req, res, next) => {
     const senhaAtual = String(req.body.senhaAtual || "");
     const novaSenha = String(req.body.novaSenha || "");
 
-    // A nova senha precisa ter pelo menos 6 caracteres e não pode ser só espaços
-    // (mesma regra do cadastro de usuários).
-    if (!senhaValida(novaSenha)) {
-      return res.status(400).json({
-        error: "A nova senha deve ter no mínimo 6 caracteres e não pode ser só espaços.",
-      });
+    // A nova senha segue a regra de senha forte (mesma do cadastro de usuários).
+    const erroSenha = mensagemSenha(novaSenha);
+    if (erroSenha) {
+      return res.status(400).json({ error: erroSenha });
     }
 
     const [usuario] = await db
@@ -252,6 +250,12 @@ router.post("/trocar-senha", requireAuth, async (req, res, next) => {
       return res.status(404).json({
         error: "Usuário não encontrado.",
       });
+    }
+
+    // A senha também não pode conter o nome do e-mail nem o primeiro nome do usuário.
+    const erroContexto = mensagemSenha(novaSenha, { email: usuario.email, nome: usuario.nome });
+    if (erroContexto) {
+      return res.status(400).json({ error: erroContexto });
     }
 
     // Exige a senha atual correta antes de trocar, também no primeiro acesso

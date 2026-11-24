@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   UFS, ufValida, nomePessoaValido, razaoSocialValida, nomeClienteValido, numeroImovelValido,
-  senhaValida, emailValido,
+  senhaValida, mensagemSenha, emailValido,
 } from "../src/validacoes.js";
 import { normalizarVinculos } from "../src/despesasRegras.js";
 import { LIMITE_QUANTIDADE, quantidadeDentroDoLimite } from "../src/estoqueRegras.js";
@@ -52,9 +52,14 @@ test("despesa: vínculo só com a categoria certa", () => {
   assert.ok(normalizarVinculos("salarios", { funcionarioId: -2 }).erro);
 });
 
-test("senha: 6 ou mais caracteres e não só espaços (CT22 a CT27)", () => {
-  for (const v of ["abc123", "abc1234", "  ab12"]) assert.ok(senhaValida(v), v);
-  for (const v of ["", "a", "abc12", "      ", null, undefined]) assert.ok(!senhaValida(v), String(v));
+test("senha forte: 8+ caracteres, 1 especial, não comum e sem o nome do e-mail", () => {
+  for (const v of ["Abc@1234", "Senha#Forte9", "tempo!2025"]) assert.ok(senhaValida(v), v);
+  for (const v of ["", "a", "abc12", "      ", null, undefined, "123456", "12345678", "abc12345", "Abc@12", "aaaaaaaa"]) {
+    assert.ok(!senhaValida(v), String(v));
+  }
+  assert.ok(!senhaValida("joao@2024!", { email: "joao@umufrio.com.br" }));
+  assert.ok(!senhaValida("Carla#2025", { nome: "Carla Nunes" }));
+  assert.match(mensagemSenha("abcdefgh"), /especial/);
 });
 
 test("e-mail: formato conferido no servidor (CT33 e CT37)", () => {
