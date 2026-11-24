@@ -43,6 +43,7 @@ export function senhaValida(senha, contexto) {
 }
 
 // E-mail no formato nome@dominio.ext, conferido também no servidor
+// (defeito CT37: antes só a tela conferia).
 export function emailValido(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
 }

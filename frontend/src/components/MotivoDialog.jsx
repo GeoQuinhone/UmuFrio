@@ -31,7 +31,7 @@ function dialogKeyDown(event, dialog, onCancel) {
 // Modal simples para coletar um texto obrigatório antes de confirmar uma
 // ação (ponto 19: motivo do atendimento não realizado). Reaproveita a
 // mesma casca visual do ConfirmDialog, mas com um campo de texto livre.
-function MotivoDialog({ title, message, placeholder, confirmLabel, cancelLabel, onConfirm, onCancel }) {
+function MotivoDialog({ title, message, placeholder, confirmLabel, cancelLabel, danger = true, minimo = 1, onConfirm, onCancel }) {
   const dialogRef = useRef(null);
   const [motivo, setMotivo] = useState("");
   const [erro, setErro] = useState("");
@@ -51,6 +51,10 @@ function MotivoDialog({ title, message, placeholder, confirmLabel, cancelLabel, 
       setErro("Informe o motivo.");
       return;
     }
+    if (motivo.trim().length < minimo) {
+      setErro(`Escreva o motivo com mais detalhes (mínimo de ${minimo} caracteres).`);
+      return;
+    }
     onConfirm(motivo.trim());
   }
 
@@ -64,7 +68,7 @@ function MotivoDialog({ title, message, placeholder, confirmLabel, cancelLabel, 
     >
       <section
         ref={dialogRef}
-        className="confirm-dialog confirm-dialog-danger confirm-dialog-motivo"
+        className={`confirm-dialog${danger ? " confirm-dialog-danger" : ""} confirm-dialog-motivo`}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="motivo-dialog-title"
@@ -92,7 +96,7 @@ function MotivoDialog({ title, message, placeholder, confirmLabel, cancelLabel, 
           <button type="button" className="btn-ghost" onClick={onCancel}>
             {cancelLabel}
           </button>
-          <button type="button" className="btn-danger" onClick={confirmar}>
+          <button type="button" className={danger ? "btn-danger" : "btn-primary"} onClick={confirmar}>
             {confirmLabel}
           </button>
         </div>
@@ -114,6 +118,9 @@ export function useMotivoDialog() {
         placeholder: options.placeholder || "Descreva o motivo...",
         confirmLabel: options.confirmLabel || "Confirmar",
         cancelLabel: options.cancelLabel || "Cancelar",
+        // Fase 11: botão azul (sem "perigo") e tamanho mínimo do motivo.
+        danger: options.danger ?? true,
+        minimo: options.minimo ?? 1,
         resolve,
       });
     });
@@ -131,6 +138,8 @@ export function useMotivoDialog() {
       placeholder={pending.placeholder}
       confirmLabel={pending.confirmLabel}
       cancelLabel={pending.cancelLabel}
+      danger={pending.danger}
+      minimo={pending.minimo}
       onConfirm={(motivo) => responder(motivo)}
       onCancel={() => responder(null)}
     />

@@ -62,7 +62,7 @@ function Timeline({ atendimento }) {
 
 // Peças extras (ponto 12): consumo de peças além das vinculadas ao serviço,
 // liberado enquanto o atendimento está em andamento.
-function PecasExtras({ ordemId, ordemStatus, pago, produtosAtivos, onConsumo }) {
+function PecasExtras({ ordemId, ordemStatus, pago, produtosAtivos, onConsumo, somenteLeitura = false }) {
   const [pecas, setPecas] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [produtoId, setProdutoId] = useState("");
@@ -143,7 +143,7 @@ function PecasExtras({ ordemId, ordemStatus, pago, produtosAtivos, onConsumo }) 
         </p>
       )}
 
-      {ordemStatus === "andamento" && !pago && (
+      {ordemStatus === "andamento" && !pago && !somenteLeitura && (
         <form className="os-extra-parts-form" onSubmit={registrarConsumo}>
           {erro && <p className="catalog-form-error os-extra-parts-error" role="alert">{erro}</p>}
           {sucessoPeca && <p className="success-banner" role="status">{sucessoPeca}</p>}
@@ -212,18 +212,36 @@ function Pagamento({ atendimento, perfil, onPagamento }) {
             <dd>{formatDateTime(atendimento.pagamentoConfirmadoEm)}</dd>
           </div>
         )}
-        {atendimento.observacaoPagamento && (
-          <div className="payment-summary-wide">
-            <dt>Observação</dt>
-            <dd>{atendimento.observacaoPagamento}</dd>
-          </div>
-        )}
+        {atendimento.observacaoPagamento &&
+          (String(atendimento.observacaoPagamento).startsWith("Pagamento pendente:") ? (
+            // Fase 11: motivo da pendência em destaque (some quando for pago).
+            <div className="payment-summary-wide pendencia-motivo">
+              <dt>Pagamento pendente · motivo</dt>
+              <dd>
+                {String(atendimento.observacaoPagamento)
+                  .replace("Pagamento pendente:", "")
+                  .split(" | ")[0]
+                  .trim()}
+              </dd>
+            </div>
+          ) : (
+            <div className="payment-summary-wide">
+              <dt>Observação</dt>
+              <dd>{atendimento.observacaoPagamento}</dd>
+            </div>
+          ))}
       </dl>
 
-      {podeAlterar ? (
+      {/* Fase 11: sem onPagamento (ex.: aberto pelos relatórios) é só consulta. */}
+      {!onPagamento ? null : podeAlterar ? (
         <button type="button" className="btn-ghost" onClick={onPagamento}>
           <Icon name="wallet" size={15} />
-          {confirmado ? "Alterar pagamento" : "Registrar pagamento"}
+          {/* Fase 11: em andamento, receber o pagamento já conclui o atendimento. */}
+          {confirmado
+            ? "Alterar pagamento"
+            : atendimento.ordemStatus === "andamento"
+              ? "Receber e concluir"
+              : "Registrar pagamento"}
         </button>
       ) : (
         <p className="payment-hint">
@@ -241,6 +259,8 @@ export default function AtendimentoDialog({
   onClose,
   onPagamento,
   onConsumoPecaExtra,
+  // Fase 11: aberto pelos relatórios, só para consulta (sem lançar peças/pagar).
+  somenteLeitura = false,
 }) {
   const dialogRef = useRef(null);
   const { user } = useAuth();
@@ -351,14 +371,24 @@ export default function AtendimentoDialog({
         </dl>
 
         {cancelado ? (
-          <p className="payment-notice" role="status">
-            {atendimento.naoRealizado
-              ? `Atendimento não realizado. Motivo: ${atendimento.motivoNaoRealizado || "não informado"}.`
-              : "Agendamento cancelado."}
+          <div className="payment-notice" role="status">
+            {atendimento.naoRealizado ? "Atendimento não realizado." : "Agendamento cancelado."}
             {atendimento.canceladoEm
               ? ` Registrado em ${formatDateTime(atendimento.canceladoEm)}.`
               : ""}
-          </p>
+            {/* Fase 11: o motivo em destaque, para ler de bate-pronto.
+                Boolean(): naoRealizado vem do banco como 0/1, e um 0 solto
+                apareceria escrito na tela. */}
+            {Boolean(atendimento.naoRealizado) ? (
+              <p className="nao-realizado-motivo">
+                <strong>Motivo:</strong> {atendimento.motivoNaoRealizado || "não informado"}
+              </p>
+            ) : (
+              <p className="nao-realizado-motivo">
+                <strong>Cancelado</strong> pela empresa antes da visita (o cliente desistiu ou remarcou).
+              </p>
+            )}
+          </div>
         ) : !atendimento.ordemId ? (
           <p className="payment-notice" role="status">
             Este agendamento ainda não tem um serviço definido. Use a opção de
@@ -367,6 +397,24 @@ export default function AtendimentoDialog({
         ) : (
           <>
             <Timeline atendimento={atendimento} />
+
+            {/* Fase 11: aviso antecipado para resolver a peça antes de ir ao cliente. */}
+            {atendimento.ordemStatus === "aberta" && atendimento.pecasFaltando?.length > 0 && (
+              <div className="os-falta-peca" role="status">
+                <strong>Falta peça no estoque para este atendimento:</strong>
+                <ul>
+                  {atendimento.pecasFaltando.map((peca) => (
+                    <li key={peca.nome}>
+                      {peca.nome}: precisa {peca.necessario}, há {peca.saldo}
+                    </li>
+                  ))}
+                </ul>
+                <small>
+                  Resolva antes de sair (estoquista confere o saldo ou a peça é comprada). Se ainda faltar, dá para
+                  iniciar mesmo assim informando o motivo.
+                </small>
+              </div>
+            )}
 
             <CheckinPanel
               ordemId={atendimento.ordemId}
@@ -391,6 +439,7 @@ export default function AtendimentoDialog({
               pago={Boolean(atendimento.pagamentoConfirmado)}
               produtosAtivos={produtosAtivos}
               onConsumo={onConsumoPecaExtra}
+              somenteLeitura={somenteLeitura}
             />
           </>
         )}

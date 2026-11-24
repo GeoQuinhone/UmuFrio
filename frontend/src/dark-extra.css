@@ -157,3 +157,16 @@ html[data-theme="dark"] .inst-menu-toggle {
     color: #ffffff;
   }
 }
+
+/* Fase 11: aviso de estoque no cadastro de serviço (tema escuro). */
+html[data-theme="dark"] .service-aviso-estoque { border-color: #5c4a1c; background: #2e2716; color: #f2c14e; }
+html[data-theme="dark"] .os-falta-peca { border-color: #5c4a1c; border-left-color: #f2c14e; background: #2e2716; color: #f7e2b0; }
+html[data-theme="dark"] .os-falta-peca small { color: #f2c14e; }
+html[data-theme="dark"] .schedule-falta-peca { background: #3a2f12; color: #f2c14e; }
+
+/* Ajuste final: "Sem check-in" e selos do check-in no tema escuro. */
+html[data-theme="dark"] .checkin-sem { border-color: #5c2a24; border-left-color: #ff8f82; background: #3a1d1a; color: #ffb3aa; }
+html[data-theme="dark"] .rel-checkin-ok { background: #173a2a; color: #8fe0b7; }
+html[data-theme="dark"] .rel-checkin-aviso { background: #3a2f12; color: #f2c14e; }
+html[data-theme="dark"] .rel-checkin-ruim { background: #3a1d1a; color: #ffb3aa; }
+html[data-theme="dark"] .rel-checkin-neutro { background: #26303a; color: #b8c4cf; }

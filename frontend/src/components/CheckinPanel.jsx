@@ -9,7 +9,8 @@ import "./checkin-panel.css";
 // aparelho do técnico; quem calcula a distância até o endereço do cliente e
 // decide se está "dentro do raio" é o servidor.
 
-function lerPosicao() {
+// Exportada: o botão Iniciar da agenda também faz o check-in.
+export function lerPosicao() {
   return new Promise((resolve, reject) => {
     if (!("geolocation" in navigator)) {
       reject(new Error("Este navegador não oferece localização."));
@@ -133,8 +134,9 @@ export default function CheckinPanel({ ordemId, ordemStatus }) {
   }
 
   async function confirmarComJustificativa() {
-    if (justificativa.trim().length < 5) {
-      setErro("Escreva uma justificativa (mínimo de 5 caracteres).");
+    const palavras = justificativa.trim().split(/\s+/).filter((p) => /\p{L}{2,}/u.test(p));
+    if (palavras.length < 2) {
+      setErro("Escreva o motivo com pelo menos duas palavras (ex.: sem vaga em frente).");
       return;
     }
     setErro("");
@@ -157,12 +159,20 @@ export default function CheckinPanel({ ordemId, ordemStatus }) {
     ) : null;
   }
 
-  const podeCheckin = info.podeRegistrar && !info.checkin && ordemStatus !== "concluida";
+  const checkinPendente = info.podeRegistrar && !info.checkin && ordemStatus !== "concluida";
+  // Fase 11: fora do dia do atendimento o botão vira um aviso.
+  const foraDoPrazo = checkinPendente && info.checkinNoPrazo === false;
+  const podeCheckin = checkinPendente && !foraDoPrazo;
+  const checkinAindaNaoAbriu =
+    foraDoPrazo && info.checkinAbreEm && new Date() < new Date(info.checkinAbreEm);
   const podeCheckout = info.podeRegistrar && info.checkin && !info.checkout && ordemStatus !== "aberta";
   const aguardaInicio = info.podeRegistrar && info.checkin && !info.checkout && ordemStatus === "aberta";
 
-  // Quem não é o técnico só vê, e só se já houver registro.
-  if (!info.podeRegistrar && !info.checkin && !info.checkout) return null;
+  // Quem não é o técnico só vê. Antes de iniciar, sem registro, não há o que
+  // mostrar; depois de iniciado, o painel aparece sempre (com "Sem check-in"
+  // quando o técnico não registrou), para o CEO saber se ele fez ou não.
+  const semCheckin = !info.checkin && ordemStatus !== "aberta";
+  if (!info.podeRegistrar && !info.checkin && !info.checkout && !semCheckin) return null;
 
   return (
     <section className="checkin-panel" aria-label="Check-in e check-out">
@@ -175,6 +185,12 @@ export default function CheckinPanel({ ordemId, ordemStatus }) {
         <Linha rotulo="Check-in" registro={info.checkin} />
         <Linha rotulo="Check-out" registro={info.checkout} />
       </dl>
+
+      {semCheckin && (
+        <p className="checkin-sem" role="status">
+          <strong>Sem check-in.</strong> O atendimento foi iniciado sem o técnico registrar a localização.
+        </p>
+      )}
 
       {erro && (
         <p className="catalog-form-error" role="alert">{erro}</p>
@@ -232,6 +248,14 @@ export default function CheckinPanel({ ordemId, ordemStatus }) {
             Raio permitido: {info.raioM} m do endereço do cliente.
           </small>
         </div>
+      )}
+
+      {!fora && foraDoPrazo && (
+        <p className="checkin-hint">
+          {checkinAindaNaoAbriu
+            ? `Check-in liberado a partir de ${formatDateTime(info.checkinAbreEm)} (início do expediente no dia do atendimento).`
+            : "O dia deste atendimento já passou. Não é possível fazer o check-in."}
+        </p>
       )}
 
       {!fora && aguardaInicio && (

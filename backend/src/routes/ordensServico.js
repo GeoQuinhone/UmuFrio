@@ -14,6 +14,7 @@ import {
    movimentacoesEstoque,
   clientes,
   usuarios,
+  registrosLocalizacao,
 } from "../db/schema.js";
 import {
   roles,
@@ -38,6 +39,9 @@ export const FORMAS_PAGAMENTO = [
 // Por padrão não é exigido: o cliente pode pagar depois, e a tela apenas avisa.
 const EXIGIR_PAGAMENTO_PARA_CONCLUIR =
   process.env.EXIGIR_PAGAMENTO_PARA_CONCLUIR === "true";
+
+// Fase 11: início da observação quando o atendimento é concluído sem receber.
+const PREFIXO_PENDENTE = "Pagamento pendente:";
 
 function emCentavos(valor) {
   return Math.round(Number(valor) * 100);
@@ -457,6 +461,8 @@ router.patch(
       }
 
       const produtosTocados = [];
+      // Fase 11: peças que faltaram ao iniciar (o atendimento seguiu com motivo).
+      let pecasEmFalta = [];
 
       const ordemAtualizada = await db.transaction(
         async (tx) => {
@@ -514,6 +520,18 @@ router.patch(
             throw error;
           }
 
+          // Ajuste final: o técnico só inicia depois do check-in (o GPS prova que ele
+          // estava no endereço do cliente). Atendente e CEO podem iniciar sem, de outro
+          // lugar (ex.: técnico sem internet no local).
+          if (proximoStatus === "andamento" && req.usuario.perfil === "tecnico") {
+            const [checkin] = await tx
+              .select({ id: registrosLocalizacao.id })
+              .from(registrosLocalizacao)
+              .where(and(eq(registrosLocalizacao.ordemId, id), eq(registrosLocalizacao.tipo, "checkin")));
+            if (!checkin) {
+              throw erroHttp("Faça o check-in antes de iniciar o atendimento.", 409, { codigo: "CHECKIN_PENDENTE" });
+            }
+          }
           if (
             proximoStatus === "concluida" &&
             EXIGIR_PAGAMENTO_PARA_CONCLUIR &&
@@ -525,9 +543,43 @@ router.patch(
             );
           }
 
+          // Fase 11: concluir sem o pagamento confirmado exige o motivo
+          // (ex.: "cliente vai pagar na empresa"). Ele fica na observação do
+          // pagamento, para a empresa saber por que não foi recebido na hora.
+          let observacaoPendente = ordem.observacaoPagamento;
+          let valorPendente = null;
+
+          if (proximoStatus === "concluida" && !ordem.pagamentoConfirmado) {
+            const motivo = String(req.body?.motivoPagamentoPendente ?? "").trim();
+            if (motivo.length < 5) {
+              throw erroHttp(
+                "O pagamento ainda não foi registrado. Registre o pagamento ou informe por que ele ficou pendente.",
+                409,
+                { codigo: "PAGAMENTO_PENDENTE" },
+              );
+            }
+            const textoPendente = `${PREFIXO_PENDENTE} ${motivo}`;
+            observacaoPendente = (
+              ordem.observacaoPagamento
+                ? `${textoPendente} | ${ordem.observacaoPagamento}`
+                : textoPendente
+            ).slice(0, 255);
+
+            // Sem acréscimo/desconto justificado, o valor a receber é serviço +
+            // peças extras (o valor gravado no início não inclui as peças).
+            if (!ordem.observacaoPagamento) {
+              const [servicoDaOrdem] = await tx
+                .select({ valor: servicos.valor })
+                .from(servicos)
+                .where(eq(servicos.id, ordem.servicoId));
+              const extras = await valorExtrasDaOrdem(tx, id);
+              valorPendente = (Number(servicoDaOrdem?.valor ?? 0) + extras).toFixed(2);
+            }
+          }
+
           // O valor cobrado nasce igual ao valor do serviço no momento em que
           // o atendimento começa; depois pode ser ajustado em /pagamento.
-          let valorCobradoInicial = ordem.valorCobrado;
+          let valorCobradoInicial = valorPendente ?? ordem.valorCobrado;
 
           if (
             proximoStatus === "andamento" &&
@@ -566,27 +618,46 @@ router.patch(
                 ),
               );
 
-            for (const peca of pecas) {
-              if (peca.saldo < peca.quantidade) {
-                const error = new Error(
-                  `Estoque insuficiente de "${peca.nome}". Necessário: ${peca.quantidade}. Disponível: ${peca.saldo}.`,
-                );
-                error.status = 409;
-                throw error;
-              }
+            // Fase 11: faltar peça não impede o atendimento. Sem motivo, o
+            // sistema avisa o que falta (para o técnico, a atendente ou o CEO
+            // decidirem); com motivo (ex.: "comprei na loja X", "o saldo
+            // estava errado"), inicia, baixa só o que existe e registra a falta.
+            const faltando = pecas.filter((peca) => peca.saldo < peca.quantidade);
+            const motivoFalta = String(req.body?.motivoFaltaPeca ?? "").trim();
+
+            if (faltando.length && motivoFalta.length < 5) {
+              const lista = faltando
+                .map((peca) => `"${peca.nome}" (necessário ${peca.quantidade}, disponível ${peca.saldo})`)
+                .join(", ");
+              throw erroHttp(`Falta peça no estoque: ${lista}.`, 409, {
+                codigo: "FALTA_PECA",
+                faltando: faltando.map((peca) => ({
+                  nome: peca.nome,
+                  necessario: peca.quantidade,
+                  saldo: peca.saldo,
+                })),
+              });
             }
+            if (motivoFalta.length > 200) {
+              throw erroHttp("O motivo pode ter no máximo 200 caracteres.", 400);
+            }
+            pecasEmFalta = faltando.map((peca) => ({ ...peca, motivo: motivoFalta }));
 
             for (const peca of pecas) {
+              // Baixa só o que o estoque tem (nunca fica negativo).
+              const quantidadeBaixa = Math.min(peca.quantidade, Math.max(peca.saldo, 0));
+              if (quantidadeBaixa <= 0) continue;
+
               const [produtoAtualizado] =
                 await tx
                   .update(produtos)
                   .set({
-                    saldo: sql`${produtos.saldo} - ${peca.quantidade}`,
+                    saldo: sql`${produtos.saldo} - ${quantidadeBaixa}`,
                   })
                   .where(
                     and(
                       eq(produtos.id, peca.produtoId),
-                      sql`${produtos.saldo} >= ${peca.quantidade}`,
+                      sql`${produtos.saldo} >= ${quantidadeBaixa}`,
                     ),
                   )
                   .returning();
@@ -608,7 +679,7 @@ router.patch(
                   usuarioId: req.usuario.id,
                   ordemServicoId: id,
                   tipo: "saida",
-                  quantidade: peca.quantidade,
+                  quantidade: quantidadeBaixa,
                   valorUnitario: peca.valorUnitario,
                 });
             }
@@ -627,6 +698,7 @@ router.patch(
                   ? new Date()
                   : ordem.concluidaEm,
               valorCobrado: valorCobradoInicial,
+              observacaoPagamento: observacaoPendente,
             })
             .where(
               and(
@@ -682,6 +754,21 @@ router.patch(
             `${dadosAviso.servicoNome} para ${dadosAviso.clienteNome}.` +
             (pendente ? " Pagamento pendente." : ""),
         });
+
+        // Fase 11: o atendimento começou com falta de peça; o CEO fica sabendo
+        // para corrigir o saldo (erro do estoquista) ou registrar a compra fora.
+        if (pecasEmFalta.length) {
+          const lista = pecasEmFalta
+            .map((peca) => `${peca.nome} (faltou ${peca.quantidade - Math.max(peca.saldo, 0)})`)
+            .join(", ");
+          await notificar({
+            tipo: "falta_peca",
+            agendamentoId: ordemAtualizada.agendamentoId,
+            ordemId: ordemAtualizada.id,
+            titulo: "Atendimento iniciado com falta de peça",
+            mensagem: `${dadosAviso.clienteNome}: ${lista}. Motivo: ${pecasEmFalta[0].motivo}`,
+          });
+        }
       }
 
       const aviso = dadosAviso
@@ -751,9 +838,15 @@ router.patch(
       }
 
       const confirmado = Boolean(req.body.pagamentoConfirmado);
-      const observacao =
-        String(req.body.observacaoPagamento || "").trim() ||
-        null;
+      let textoObservacao = String(req.body.observacaoPagamento || "").trim();
+
+      // Fase 11: com o pagamento confirmado, o "Pagamento pendente: ..." da
+      // conclusão perde o sentido e sai da observação (fica o resto, se houver).
+      if (confirmado && textoObservacao.startsWith(PREFIXO_PENDENTE)) {
+        textoObservacao = textoObservacao.split(" | ").slice(1).join(" | ").trim();
+      }
+
+      const observacao = textoObservacao || null;
 
       if (observacao && observacao.length > 255) {
         return res.status(400).json({

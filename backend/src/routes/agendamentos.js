@@ -12,7 +12,7 @@ import {
   veiculos,
 } from "../db/schema.js";
 import { roles, validId } from "../security.js";
-import { erroHttp, excluirOrdem, sqlValorExtras } from "../ordemHelpers.js";
+import { erroHttp, excluirOrdem, sqlPecasFaltando, sqlValorExtras } from "../ordemHelpers.js";
 import { notificar } from "../notificacoes.js";
 import { avisarCliente } from "../whatsapp.js";
 
@@ -56,6 +56,8 @@ function selecaoUnificada() {
       servicoNome: servicos.nome,
       servicoValor: servicos.valor,
       extrasValor: sqlValorExtras(ordensServico.id),
+      // Fase 11: peças que faltam no estoque para este atendimento (aviso antecipado).
+      pecasFaltando: sqlPecasFaltando(ordensServico.servicoId, ordensServico.status),
       ordemStatus: ordensServico.status,
       abertaEm: ordensServico.abertaEm,
       iniciadaEm: ordensServico.iniciadaEm,
@@ -95,6 +97,20 @@ const EXPEDIENTE_FIM = 19 * 60;
 // Diz se dois horários estão a menos de 1 hora de distância (regra: mínimo de 1h entre atendimentos do mesmo técnico).
 function horarioMuitoProximo(horaA, horaB) {
   return Math.abs(minutosDoDia(horaA) - minutosDoDia(horaB)) < 60;
+}
+
+// Ajuste final: minutos do dia de agora no fuso de Brasília (ex.: 12:32 = 752).
+function minutosAgora() {
+  const [h, m] = new Intl.DateTimeFormat("en-GB", {
+    timeZone: process.env.RELATORIOS_FUSO || "America/Sao_Paulo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  })
+    .format(new Date())
+    .split(":")
+    .map(Number);
+  return h * 60 + m;
 }
 
 // Data de hoje no fuso de Brasília (YYYY-MM-DD), independente do fuso do
@@ -144,6 +160,14 @@ async function validarAtendimento(executor, body, { id = null, atual = null } = 
       400,
     );
   }
+  // Ajuste final: hoje, só a partir do horário atual (Brasília). Ninguém lança
+  // atendimento no passado; vale ao criar ou ao mudar a data ou o horário.
+  if ((dataMudou || horaMudou) && data === dataDeHoje() && minutosDoDia(hora) < minutosAgora()) {
+    throw erroHttp(
+      "Este horário já passou. Escolha um horário a partir de agora.",
+      400,
+    );
+  }
 
   // Trava do expediente: o horário precisa estar entre 07:00 e 19:00 (valida ao criar ou quando o horário é alterado).
   if (horaMudou) {
@@ -172,8 +196,9 @@ async function validarAtendimento(executor, body, { id = null, atual = null } = 
         ),
       executor.select().from(servicos).where(eq(servicos.id, servicoId)),
       executor
-        .select()
+        .select({ hora: agendamentos.hora, ordemStatus: ordensServico.status })
         .from(agendamentos)
+        .leftJoin(ordensServico, eq(ordensServico.agendamentoId, agendamentos.id))
         .where(
           and(
             eq(agendamentos.tecnicoId, tecnicoId),
@@ -211,7 +236,15 @@ async function validarAtendimento(executor, body, { id = null, atual = null } = 
 
   // Ponto 9: o mesmo técnico precisa de no mínimo 1h entre dois
   // agendamentos no mesmo dia (não só evitar o horário exato igual).
-  if (mesmoDia.some((outro) => horarioMuitoProximo(outro.hora, hora))) {
+  // Ajuste final: atendimento já concluído libera o horário (o técnico que
+  // adianta abre espaço na agenda); só o horário exato continua ocupado.
+  if (
+    mesmoDia.some((outro) =>
+      outro.ordemStatus === "concluida"
+        ? minutosDoDia(outro.hora) === minutosDoDia(hora)
+        : horarioMuitoProximo(outro.hora, hora),
+    )
+  ) {
     throw erroHttp(
       "Este técnico já possui um agendamento a menos de 1h de diferença nesse horário.",
       409,

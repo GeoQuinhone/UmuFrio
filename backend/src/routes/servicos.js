@@ -11,7 +11,9 @@ import { erroHttp } from "../httpError.js";
 
 const router = Router();
 
-// Fase 11: confere se o estoque comporta as peças do serviço (soma peças repetidas) e recusa o que passar do saldo.
+// Fase 11: confere se cada peça do serviço existe no estoque. O saldo de hoje
+// NÃO trava o cadastro: o catálogo é fixo e o estoque muda todo dia; a falta de
+// peça é avisada na agenda e tratada na hora de iniciar o atendimento.
 async function conferirEstoque(pecas) {
   if (!pecas.length) return;
   const necessario = new Map();
@@ -24,15 +26,9 @@ async function conferirEstoque(pecas) {
     .from(produtos)
     .where(inArray(produtos.id, [...necessario.keys()]));
   const porId = new Map(linhas.map((linha) => [linha.id, linha]));
-  for (const [idProduto, quantidade] of necessario) {
+  for (const idProduto of necessario.keys()) {
     const produto = porId.get(idProduto);
     if (!produto) throw erroHttp("Existe uma peça com produto que não está no estoque.", 400);
-    if (quantidade > Number(produto.saldo)) {
-      throw erroHttp(
-        `Estoque insuficiente de "${produto.nome}" para este serviço. Necessário: ${quantidade}. Disponível: ${produto.saldo}.`,
-        400,
-      );
-    }
   }
 }
 

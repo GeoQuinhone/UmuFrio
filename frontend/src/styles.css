@@ -2358,3 +2358,28 @@ a.app-nav-item:focus-visible {
 .produto-select-tag.tag-zerado { background: #fdecec; color: #a12a2a; }
 .produto-select-tag.tag-baixo { background: #fff3d6; color: #8a5a00; }
 .produto-select-vazio { padding: 10px; color: var(--uf-muted); font-size: 12px; }
+
+/* Fase 11: com três botões (ex.: concluir sem pagamento), um embaixo do outro. */
+.confirm-dialog-actions:has(> :nth-child(3)) {
+  flex-direction: column-reverse;
+  gap: 8px;
+}
+
+/* Fase 11: atalho "Pagamentos pendentes" do Início em destaque quando há valor a receber. */
+.dashboard-quick-alerta .dashboard-quick-icon { background: #fdecea; color: #c0392b; }
+.dashboard-quick-alerta .dashboard-quick-copy small { color: #b03024; font-weight: 700; }
+
+/* Ajuste final: cartão do Início com atalho (botão com o mesmo visual do cartão). */
+.dashboard-stat-link {
+  appearance: none;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dashboard-stat-link:hover,
+.dashboard-stat-link:focus-visible {
+  outline: 2px solid #2f6fb5;
+  outline-offset: 2px;
+}
